@@ -1,0 +1,19 @@
+﻿Python spezifisch
+pycache/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+App-Daten (Verhindert das Hochladen deiner privaten Historie)
+backup_history.json
+backup_config.json
+*.tmp
+IDE / System
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Backup Archive (Sollten nicht im Git landen!)
+.zip
+backup_.zip
