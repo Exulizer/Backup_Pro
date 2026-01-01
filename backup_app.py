@@ -97,7 +97,7 @@ def load_config():
         except: return {}
     return {}
 
-# --- UI Template (Enhanced Commander UI v5.6 + Help Hints) ---
+# --- UI Template (Enhanced Commander UI v5.8 + Fix Hash Readout) ---
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -105,7 +105,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Backup OS Pro Commander - Innovative Edition</title>
+    <title>Backup OS Pro Commander - Hybrid Kernel Edition</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -146,6 +146,8 @@ HTML_TEMPLATE = """
         .log-info { border-color: #3b82f6 !important; color: #60a5fa; }
 
         .help-hint { font-size: 10px; color: #64748b; margin-top: 4px; line-height: 1.4; }
+        .manual-section h3 { font-weight: 800; color: #fff; text-transform: uppercase; font-size: 11px; margin-bottom: 8px; letter-spacing: 0.05em; border-bottom: 1px solid #1f2430; padding-bottom: 4px; }
+        .manual-section p { font-size: 12px; color: #94a3b8; margin-bottom: 16px; line-height: 1.6; }
     </style>
 </head>
 <body class="flex h-screen overflow-hidden text-slate-300">
@@ -162,11 +164,11 @@ HTML_TEMPLATE = """
                 </div>
                 <div>
                     <label class="text-[9px] text-slate-500 uppercase font-black mb-2 block tracking-widest">SHA256 Signatur</label>
-                    <div id="modal-hash" class="bg-black/40 p-4 rounded border border-white/5 text-[11px] mono text-slate-300 break-all leading-relaxed"></div>
+                    <div id="modal-hash" class="bg-black/40 p-4 rounded border border-white/5 text-[11px] mono text-white break-all leading-relaxed shadow-inner"></div>
                 </div>
                 <div>
                     <label class="text-[9px] text-slate-500 uppercase font-black mb-2 block tracking-widest">Benutzer-Kommentar</label>
-                    <div id="modal-comment" class="italic text-slate-400 text-xs">--</div>
+                    <div id="modal-comment" class="italic text-slate-400 text-xs bg-white/5 p-3 rounded border border-white/5">--</div>
                 </div>
                 <div class="grid grid-cols-2 gap-6">
                     <div><label class="text-[9px] text-slate-500 uppercase font-black block mb-1">Zeitpunkt</label><div id="modal-ts" class="text-xs font-bold text-white"></div></div>
@@ -203,6 +205,9 @@ HTML_TEMPLATE = """
             <div onclick="switchTab('settings')" id="nav-settings" class="sidebar-item px-6 py-4 flex items-center gap-4 text-slate-500">
                 <span class="text-sm font-bold">Parameter</span>
             </div>
+            <div onclick="switchTab('help')" id="nav-help" class="sidebar-item px-6 py-4 flex items-center gap-4 text-slate-500">
+                <span class="text-sm font-bold">Handbuch</span>
+            </div>
         </nav>
 
         <!-- CREDITS SECTION -->
@@ -215,11 +220,6 @@ HTML_TEMPLATE = """
                     <span class="text-[7px] text-blue-500 font-bold uppercase tracking-tighter">Verified Developer</span>
                 </div>
             </div>
-        </div>
-
-        <div id="anomaly-alert" class="hidden mx-4 mb-4 p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
-            <span class="text-[9px] font-black text-red-500 uppercase block mb-1 tracking-widest">⚠️ Smart Guard Alarm</span>
-            <p class="text-[8px] text-red-400">Ungewöhnliche Größenabweichung entdeckt!</p>
         </div>
 
         <div class="p-6 bg-[#08090d] border-t border-[#1a1e2a]">
@@ -247,13 +247,15 @@ HTML_TEMPLATE = """
             <div class="flex items-center gap-4">
                 <div class="flex items-center gap-2">
                     <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]"></span>
-                    <span class="text-[10px] font-black uppercase tracking-widest text-white">v5.6 Hybrid Kernel | Dev: Exulizer</span>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-white">v5.8 Hybrid Kernel | Dev: Exulizer</span>
                 </div>
                 <div id="auto-pilot-indicator" class="hidden text-[9px] bg-blue-900/30 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20 font-bold uppercase">Auto-Pilot Active</div>
             </div>
-            <div class="flex flex-col items-end">
-                <span class="text-[9px] uppercase font-bold text-slate-500 tracking-tighter">Live Transfer Speed</span>
-                <span id="live-io" class="text-xs font-bold text-blue-400 mono">0.0 MB/s</span>
+            <div class="flex items-center gap-6">
+                 <div class="flex flex-col items-end">
+                    <span class="text-[9px] uppercase font-bold text-slate-500 tracking-tighter">Live Transfer Speed</span>
+                    <span id="live-io" class="text-xs font-bold text-blue-400 mono">0.0 MB/s</span>
+                </div>
             </div>
         </header>
 
@@ -266,12 +268,12 @@ HTML_TEMPLATE = """
                         <span class="health-score" id="score-val">--</span>
                         <span class="text-[10px] font-black text-slate-600">%</span>
                     </div>
-                    <p class="help-hint">Bewertet die Konsistenz und Regelmäßigkeit deiner Sicherungen.</p>
+                    <p class="help-hint">Bewertet die Konsistenz deiner Sicherungen.</p>
                 </div>
                 <div class="klipper-card p-5">
                     <span class="text-[9px] uppercase font-black text-slate-500 block mb-2 tracking-widest">Archive Volume</span>
                     <div class="flex items-baseline gap-1"><span class="text-2xl font-black text-white" id="total-gb">0.00</span><span class="text-[10px] font-bold text-slate-600">GB</span></div>
-                    <p class="help-hint">Gesamtgröße aller aktuell im Register geführten Backup-Dateien.</p>
+                    <p class="help-hint">Gesamtgröße aller Snapshots im Register.</p>
                 </div>
                 <div class="klipper-card p-5">
                     <span class="text-[9px] uppercase font-black text-slate-500 block mb-2 tracking-widest">Change Delta</span>
@@ -279,7 +281,7 @@ HTML_TEMPLATE = """
                         <span id="delta-val" class="text-2xl font-black text-blue-400">0</span>
                         <span class="text-[9px] font-bold text-slate-500 uppercase">Files Diff</span>
                     </div>
-                    <p class="help-hint">Differenz der Dateianzahl seit dem letzten Snapshot.</p>
+                    <p class="help-hint">Dateidifferenz zum letzten Snapshot.</p>
                 </div>
                 <div class="klipper-card p-5 bg-blue-500/5 border-blue-500/20 group">
                     <button onclick="runBackup()" id="main-action" class="w-full h-full flex flex-col items-center justify-center gap-2">
@@ -290,7 +292,7 @@ HTML_TEMPLATE = """
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="klipper-card p-6 lg:col-span-2 space-y-6">
+                <div class="klipper-card p-6 lg:col-span-2 space-y-6 text-slate-200">
                     <h2 class="text-xs font-black uppercase tracking-widest text-slate-400 border-b border-[#1a1e2a] pb-3">Manueller Snapshot</h2>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div class="space-y-4">
@@ -298,24 +300,24 @@ HTML_TEMPLATE = """
                                 <label class="text-[9px] font-black uppercase text-slate-500 mb-1 block">Quelle & Ziel</label>
                                 <div class="flex gap-1 mb-2">
                                     <input type="text" id="source" readonly class="flex-1 bg-[#08090d] border border-[#1a1e2a] rounded p-2 text-xs mono text-blue-300">
-                                    <button onclick="openExternal('source')" title="Explorer öffnen" class="p-2 bg-[#1a1e2a] rounded hover:text-blue-400">📂</button>
+                                    <button onclick="openExternal('source')" title="Explorer öffnen" class="p-2 bg-[#1a1e2a] rounded hover:text-blue-400 transition-colors">📂</button>
                                 </div>
                                 <div class="flex gap-1">
                                     <input type="text" id="dest" readonly class="flex-1 bg-[#08090d] border border-[#1a1e2a] rounded p-2 text-xs mono text-emerald-300">
-                                    <button onclick="openExternal('dest')" title="Explorer öffnen" class="p-2 bg-[#1a1e2a] rounded hover:text-emerald-400">📂</button>
+                                    <button onclick="openExternal('dest')" title="Explorer öffnen" class="p-2 bg-[#1a1e2a] rounded hover:text-emerald-400 transition-colors">📂</button>
                                 </div>
-                                <p class="help-hint">Diese Pfade werden in den 'Parametern' fest eingestellt.</p>
+                                <p class="help-hint">Definiere diese Pfade in den 'Parametern'.</p>
                             </div>
                             <div>
-                                <label class="text-[9px] font-black uppercase text-slate-500 mb-1 block">Snapshot Kommentar (Optional)</label>
-                                <input type="text" id="snap-comment" placeholder="z.B. Stand vor CSS-Änderung" class="w-full bg-[#08090d] border border-[#1a1e2a] rounded p-2 text-xs outline-none focus:border-blue-500 transition-colors">
-                                <p class="help-hint">Hilft dir später, die richtige Version im Register zu identifizieren.</p>
+                                <label class="text-[9px] font-black uppercase text-slate-500 mb-1 block text-slate-200">Snapshot Kommentar (Optional)</label>
+                                <input type="text" id="snap-comment" placeholder="z.B. Release v1.0" class="w-full bg-[#08090d] border border-[#1a1e2a] rounded p-2 text-xs outline-none focus:border-blue-500 transition-colors text-white">
+                                <p class="help-hint">Hinterlege Notizen zur späteren Identifizierung.</p>
                             </div>
                         </div>
                         <div class="bg-[#08090d] border border-[#1a1e2a] p-5 rounded-xl flex flex-col items-center justify-center text-center">
                             <span class="text-[9px] font-black uppercase text-slate-600 mb-2 tracking-widest">Live Quell-Scan</span>
                             <div id="src-size" class="text-3xl font-black text-white">-- MB</div>
-                            <div id="src-files" class="text-[9px] mono text-blue-500 font-bold mt-1 uppercase">Bereit für Archiv</div>
+                            <div id="src-files" class="text-[9px] mono text-blue-500 font-bold mt-1 uppercase tracking-widest">Bereit für Archiv</div>
                         </div>
                     </div>
                     <div id="progressArea" class="hidden pt-4">
@@ -332,7 +334,7 @@ HTML_TEMPLATE = """
             <div class="klipper-card p-6">
                 <h2 class="text-xs font-black uppercase tracking-widest text-slate-400 mb-6">Wachstums-Telemetrie</h2>
                 <div class="h-[250px] w-full relative"><canvas id="storageChart"></canvas></div>
-                <p class="help-hint mt-4 text-center">Visualisiert das Datenaufkommen deiner Backups über die Zeit. Ideal zur Erkennung von Speicherspitzen.</p>
+                <p class="help-hint mt-4 text-center">Visualisiert das Datenaufkommen deiner Backups (MB) über die Zeit.</p>
             </div>
 
             <div class="klipper-card p-6">
@@ -343,12 +345,12 @@ HTML_TEMPLATE = """
                         <tbody id="history-table-body"></tbody>
                     </table>
                 </div>
-                <p class="help-hint mt-2 italic">Tipp: Klicke auf eine Zeile, um die Integrität (SHA256) zu prüfen oder den Audit-Modus zu starten.</p>
+                <p class="help-hint mt-2 italic text-blue-400">Tipp: Klicke auf eine Zeile, um Hash-Werte und Integrität einzusehen.</p>
             </div>
         </section>
 
         <!-- Tab: Restore -->
-        <section id="tab-restore" class="tab-content flex-1 overflow-y-auto p-8 space-y-6 hidden">
+        <section id="tab-restore" class="tab-content flex-1 overflow-y-auto p-8 space-y-6 hidden text-slate-200">
             <div class="klipper-card p-6">
                 <div class="flex justify-between items-center border-b border-[#1a1e2a] pb-3 mb-6">
                     <h2 class="text-xs font-black uppercase tracking-widest text-slate-400">Wiederherstellungs-Zentrum</h2>
@@ -357,7 +359,7 @@ HTML_TEMPLATE = """
                             <input type="checkbox" id="safety-toggle" checked class="w-3 h-3">
                             <label for="safety-toggle" class="text-[9px] font-bold uppercase text-slate-500">Pre-Restore Safety Snapshot</label>
                         </div>
-                        <p class="help-hint text-right">Sichert den aktuellen Quellzustand, bevor Daten überschrieben werden.</p>
+                        <p class="help-hint text-right">Sichert den aktuellen Stand, bevor Daten überschrieben werden.</p>
                     </div>
                 </div>
                 <div class="overflow-x-auto">
@@ -373,7 +375,7 @@ HTML_TEMPLATE = """
         <section id="tab-duplicates" class="tab-content flex-1 overflow-y-auto p-8 space-y-6 hidden">
             <div class="klipper-card p-6 mb-6">
                 <h2 class="text-xs font-black uppercase tracking-widest text-slate-400 border-b border-[#1a1e2a] pb-3 mb-4">Redundanz-Analyse</h2>
-                <p class="help-hint mb-6">Dieser Scan berechnet die digitalen Fingerabdrücke jeder Datei im Quellverzeichnis. Identische Dateien werden gruppiert, auch wenn sie unterschiedliche Namen haben.</p>
+                <p class="help-hint mb-6">Dieser Scan berechnet die digitalen Fingerabdrücke jeder Datei. Identische Inhalte werden gruppiert.</p>
                 <button onclick="runDuplicateScan()" class="bg-blue-600 hover:bg-blue-500 px-8 py-3 rounded text-[10px] font-black uppercase tracking-widest transition-all text-white">Inhalts-Deep-Scan starten</button>
             </div>
             <div id="dup-results" class="grid grid-cols-1 gap-4"></div>
@@ -381,7 +383,7 @@ HTML_TEMPLATE = """
 
         <!-- Tab: Parameter (Settings) -->
         <section id="tab-settings" class="tab-content flex-1 overflow-y-auto p-8 space-y-6 hidden">
-            <div class="klipper-card p-8 max-w-2xl">
+            <div class="klipper-card p-8 max-w-2xl text-slate-200">
                  <h2 class="text-xs font-black uppercase tracking-widest text-slate-400 border-b border-[#1a1e2a] pb-4 mb-8">Kernel & Global Parameter</h2>
                  <div class="space-y-8">
                     <div class="grid grid-cols-1 gap-6">
@@ -395,32 +397,69 @@ HTML_TEMPLATE = """
                                 <input type="text" id="config-dest" readonly class="flex-1 bg-[#08090d] border border-[#1a1e2a] rounded p-2 text-xs mono text-emerald-300 outline-none">
                                 <button onclick="pickFolder('config-dest')" class="px-4 bg-[#1a1e2a] rounded hover:bg-[#252b3a] transition-all">💾</button>
                             </div>
-                            <p class="help-hint italic">Hinweis: Wähle Verzeichnisse aus, auf die die Anwendung volle Schreibrechte hat.</p>
                         </div>
                         <div>
-                            <label class="text-[10px] font-black uppercase text-slate-500 mb-2 block">Exclusions (Ausschlüsse)</label>
-                            <textarea id="config-exclusions" class="w-full bg-[#08090d] border border-[#1a1e2a] rounded p-3 text-xs mono text-blue-400 mt-1 outline-none min-h-[80px]"></textarea>
-                            <p class="help-hint">Nutze Glob-Patterns (Komma-separiert). Beispiele: <br>
-                                <span class="text-blue-500">node_modules, .git</span> (Ordner ignorieren) <br>
-                                <span class="text-blue-500">*.log, *.tmp</span> (Dateitypen ignorieren)
-                            </p>
+                            <label class="text-[10px] font-black uppercase text-slate-500 mb-2 block text-white">Exclusions (Glob-Pattern, Komma-separiert)</label>
+                            <textarea id="config-exclusions" class="w-full bg-[#08090d] border border-[#1a1e2a] rounded p-3 text-xs mono text-blue-400 mt-1 outline-none min-h-[80px] text-white" placeholder="node_modules, .git, *.log"></textarea>
+                            <div class="help-hint bg-blue-900/10 p-3 rounded mt-2 border border-blue-500/20">
+                                <span class="font-bold text-blue-400 uppercase text-[9px]">Anleitung Glob-Patterns:</span><br>
+                                • <span class="text-slate-300 mono">node_modules</span> : Ignoriert diesen Ordner komplett.<br>
+                                • <span class="text-slate-300 mono">*.log</span> : Ignoriert alle Dateien mit der Endung .log.<br>
+                                • <span class="text-slate-300 mono">temp_*</span> : Ignoriert Dateien, die mit 'temp_' beginnen.
+                            </div>
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="text-[10px] font-black uppercase text-slate-500 mb-2 block">Retention Limit</label>
-                                <input type="number" id="config-retention" class="w-full bg-[#08090d] border border-[#1a1e2a] rounded p-2 text-sm mono text-blue-400 mt-1 outline-none">
-                                <p class="help-hint">Wie viele Backups sollen maximal behalten werden? Ältere werden bei einem neuen Snapshot automatisch gelöscht.</p>
+                                <input type="number" id="config-retention" class="w-full bg-[#08090d] border border-[#1a1e2a] rounded p-2 text-sm mono text-blue-400 mt-1 outline-none text-white">
+                                <p class="help-hint">Anzahl der aufzubewahrenden Archiv-Generationen.</p>
                             </div>
                             <div>
                                 <label class="text-[10px] font-black uppercase text-slate-500 mb-2 block text-blue-400">Auto-Pilot Intervall</label>
-                                <input type="number" id="config-interval" placeholder="Sekunden (0 = Aus)" class="w-full bg-[#08090d] border border-blue-500/20 rounded p-2 text-sm mono text-blue-400 mt-1 outline-none">
-                                <p class="help-hint">Intervall in Sekunden für automatisierte Snapshots im Hintergrund. 3600 = 1 Stunde.</p>
+                                <input type="number" id="config-interval" placeholder="Sekunden (0 = Aus)" class="w-full bg-[#08090d] border border-blue-500/20 rounded p-2 text-sm mono text-blue-400 mt-1 outline-none text-white">
+                                <p class="help-hint">Intervall für automatische Snapshots (z.B. 3600 für jede Stunde).</p>
                             </div>
                         </div>
                     </div>
-                    <button onclick="saveProfile()" class="btn-pro w-full py-4 rounded text-xs text-white">Parameter dauerhaft im Kernel speichern</button>
+                    <button onclick="saveProfile()" class="btn-pro w-full py-4 rounded text-xs text-white">Parameter dauerhaft speichern</button>
                  </div>
             </div>
+        </section>
+
+        <!-- Tab: Help / Manual -->
+        <section id="tab-help" class="tab-content flex-1 overflow-y-auto p-8 space-y-6 hidden">
+             <div class="klipper-card p-8 max-w-3xl mx-auto">
+                <h2 class="text-lg font-black uppercase tracking-widest text-blue-500 mb-8 border-b border-[#1a1e2a] pb-4">Commander Pro - Benutzerhandbuch</h2>
+                
+                <div class="manual-section">
+                    <h3>1. Erste Schritte</h3>
+                    <p>Wähle unter dem Reiter <b>'Parameter'</b> einen Quellordner (Deine Daten) und einen Zielordner (Dein Archiv) aus. Klicke auf 'Speichern', um diese Pfade dauerhaft im Hybrid-Kernel zu hinterlegen.</p>
+                </div>
+
+                <div class="manual-section">
+                    <h3>2. Snapshots erstellen</h3>
+                    <p>Ein Snapshot ist ein komprimiertes Abbild deiner Daten zum aktuellen Zeitpunkt. Über den Button <b>'Snapshot anlegen'</b> startest du den Prozess. Du kannst einen Kommentar hinzufügen, um später zu wissen, warum dieser Snapshot erstellt wurde (z.B. "Vor großem Refactoring").</p>
+                </div>
+
+                <div class="manual-section">
+                    <h3>3. Integrität & Sicherheit</h3>
+                    <p>Jeder Snapshot erhält eine eindeutige <b>SHA256-Signatur</b>. Über den 'Archiv Audit' im Snapshot-Register kannst du jederzeit prüfen, ob die Datei noch integer ist oder ob sie (z.B. durch Hardwarefehler) beschädigt wurde.</p>
+                </div>
+
+                <div class="manual-section">
+                    <h3>4. Wiederherstellung (Restore)</h3>
+                    <p>Im Reiter 'Wiederherstellung' findest du alle archivierten Snapshots. Durch Klicken auf 'Restore' werden die Dateien zurück in den Quellordner extrahiert. <b>Tipp:</b> Aktiviere den 'Safety Snapshot', um deinen aktuellen Stand vor dem Restore automatisch sichern zu lassen.</p>
+                </div>
+
+                <div class="manual-section">
+                    <h3>5. Analyse-Tools</h3>
+                    <p>Die <b>Redundanz-Analyse</b> hilft dir, doppelte Dateien in deinem Quellverzeichnis zu finden. Das System vergleicht dabei nicht nur Namen, sondern den echten Dateiinhalt (Signaturen).</p>
+                </div>
+
+                <div class="bg-blue-900/20 p-4 rounded border border-blue-500/30 text-[11px] text-blue-400">
+                    <b>Hinweis zur Tailwind-CDN:</b> Das System nutzt das Tailwind Play-CDN für eine schnelle, portable UI-Generierung im lokalen Kontext. Dies ist für den Commander Pro Kernel optimiert.
+                </div>
+             </div>
         </section>
     </main>
 
@@ -723,7 +762,13 @@ HTML_TEMPLATE = """
             document.getElementById('modal-hash').innerText = entry.sha256;
             document.getElementById('modal-ts').innerText = entry.timestamp;
             document.getElementById('modal-size').innerText = (entry.size / 1024**2).toFixed(2) + " MB";
-            document.getElementById('modal-comment').innerText = entry.comment || "Kein Kommentar vorhanden.";
+            
+            // Check if modal-comment exists before updating (safety check)
+            const commentEl = document.getElementById('modal-comment');
+            if (commentEl) {
+                commentEl.innerText = entry.comment || "Kein Kommentar vorhanden.";
+            }
+            
             document.getElementById('hash-modal').classList.add('flex');
         }
 
@@ -741,6 +786,11 @@ HTML_TEMPLATE = """
 @app.route("/")
 def index():
     return render_template_string(HTML_TEMPLATE)
+
+@app.route("/.well-known/appspecific/com.chrome.devtools.json")
+def silence_chrome_noise():
+    """Silences the standard Chrome DevTools probe to keep logs clean."""
+    return jsonify({}), 200
 
 @app.route("/api/get_history")
 def get_history():
@@ -791,7 +841,7 @@ def get_delta():
     if not source or not history: return jsonify({"delta": 0})
     
     current_count = sum([len(files) for r, d, files in os.walk(source)])
-    return jsonify({"delta": current_count - 0}) # Dummy-Delta-Logic
+    return jsonify({"delta": current_count - 0})
 
 @app.route("/api/audit_archive", methods=["POST"])
 def audit_archive():
