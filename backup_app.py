@@ -399,7 +399,7 @@ HTML_TEMPLATE = """
                             ticks: { 
                                 color: '#4b5563', 
                                 font: { size: 9 },
-                                callback: function(value) { return value + ' MB'; }
+                                callback: function(value) { return value.toFixed(2) + ' MB'; }
                             } 
                         } 
                     } 
