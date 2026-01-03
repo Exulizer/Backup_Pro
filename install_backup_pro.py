@@ -134,10 +134,11 @@ class InstallerApp:
                                    command=self.download_from_github,
                                    bg=COLORS["warning"], fg="#000000",
                                    font=("Segoe UI", 11), relief="flat",
-                                   padx=20, pady=8, cursor="hand2")
+                                   padx=20, pady=8, cursor="hand2",
+                                   state="disabled") # Initial disabled
         self.btn_download.pack(side="right", padx=10)
         
-        self.btn_exit = tk.Button(btn_frame, text="Abbrechen", 
+        self.btn_exit = tk.Button(btn_frame, text="Abbrechen",  
                                 command=self.root.quit,
                                 bg="#555555", fg=COLORS["btn_text"],
                                 font=("Segoe UI", 11), relief="flat",
@@ -259,8 +260,23 @@ if %errorlevel% neq 0 pause
                     self.root.after(0, lambda u=url: self.log(f"Versuche: {u}...", "info"))
                     with urllib.request.urlopen(url, context=ctx) as response:
                         if response.getcode() == 200:
+                            total_size = int(response.info().get('Content-Length', 0))
+                            downloaded = 0
+                            chunk_size = 8192
+                            
                             with open(target, 'wb') as out_file:
-                                out_file.write(response.read())
+                                while True:
+                                    chunk = response.read(chunk_size)
+                                    if not chunk:
+                                        break
+                                    out_file.write(chunk)
+                                    downloaded += len(chunk)
+                                    
+                                    if total_size > 0:
+                                        percent = (downloaded / total_size) * 100
+                                        # UI Update (Thread-safe via after)
+                                        self.root.after(0, lambda p=percent: self.progress.configure(value=p))
+                                        
                             success = True
                             break
                 except Exception as e:
@@ -300,21 +316,30 @@ if %errorlevel% neq 0 pause
         # 2. Dependencies
         self.log("Installiere Python-Bibliotheken...", "info")
         all_success = True
-        for pkg in REQUIRED_PACKAGES:
-            self.log(f"Installiere {pkg}...")
+        total_pkgs = len(REQUIRED_PACKAGES)
+        
+        for i, pkg in enumerate(REQUIRED_PACKAGES, 1):
+            self.log(f"Installiere {pkg} ({i}/{total_pkgs})...")
+            # Update Progress bar smooth (0-100% relative to package count)
+            # Wir nutzen hier den Bereich 0-80% des Gesamtfortschritts für Packages
+            progress_val = int((i / total_pkgs) * 80)
+            self.root.after(0, lambda v=progress_val: self.progress.configure(mode="determinate", value=v))
+            
             if self.install_package(pkg):
-                self.log(f"{pkg} installiert.", "success")
+                self.log(f"{pkg} erfolgreich installiert.", "success")
             else:
                 self.log(f"Fehler bei {pkg}!", "error")
                 all_success = False
         
         # 3. Launcher
         self.log("Erstelle Start-Skript...", "info")
+        self.root.after(0, lambda: self.progress.configure(value=90))
         if self.create_launcher():
             self.log("start_backup_pro.bat erstellt.", "success")
         
         # 4. Shortcut
         self.log("Erstelle Desktop-Verknüpfung...", "info")
+        self.root.after(0, lambda: self.progress.configure(value=100))
         if self.create_shortcut():
             self.log("Desktop-Icon erstellt.", "success")
         else:
@@ -325,6 +350,8 @@ if %errorlevel% neq 0 pause
         
         if all_success:
             self.log("Installation vollständig abgeschlossen!", "success")
+            # Button aktivieren
+            self.root.after(0, lambda: self.btn_download.config(state="normal", bg=COLORS["warning"]))
             self.root.after(1000, self.show_success_dialog)
         else:
             self.log("Installation mit Warnungen beendet.", "warn")

@@ -334,17 +334,27 @@ def run_backup_logic(source, dest, comment="Automatisches Backup"):
         # 2. Archivierung
         current_job_status.update({"step": "archiving", "message": "Analysiere Dateistruktur...", "progress": 5})
         
-        file_count = 0
         total_files_est = 0
+        total_bytes_est = 0
         
-        # Grobe Schätzung für Progress Bar
+        # Grobe Schätzung für Progress Bar (Files & Bytes)
         for r, _, f in os.walk(source):
-            total_files_est += len(f)
-        if total_files_est == 0: total_files_est = 1
+            for file in f:
+                if not is_excluded(file, exclusions):
+                    total_files_est += 1
+                    try:
+                        total_bytes_est += os.path.getsize(os.path.join(r, file))
+                    except: pass
         
-        logger.info(f"Starte Archivierung von {source} nach {zip_path}")
+        if total_files_est == 0: total_files_est = 1
+        if total_bytes_est == 0: total_bytes_est = 1
+        
+        logger.info(f"Starte Archivierung von {source} nach {zip_path} ({total_files_est} Dateien, {total_bytes_est/1024/1024:.2f} MB)")
         
         current_job_status.update({"message": f"Archiviere {total_files_est} Dateien...", "progress": 10})
+        
+        processed_bytes = 0
+        file_count = 0
         
         # Verwende ZIP_DEFLATED für Kompression, optional AES-Verschlüsselung
         if enc_enabled and enc_pw:
@@ -366,12 +376,15 @@ def run_backup_logic(source, dest, comment="Automatisches Backup"):
                         full_file_path = os.path.join(root, file)
                         relative_path = os.path.relpath(full_file_path, source)
                         try:
+                            fsize = os.path.getsize(full_file_path)
                             zipf.write(full_file_path, relative_path)
-                            file_count += 1
                             
-                            # Progress Update (10% -> 90%)
-                            if file_count % 10 == 0: # Nicht zu oft updaten
-                                prog = 10 + int((file_count / total_files_est) * 80)
+                            file_count += 1
+                            processed_bytes += fsize
+                            
+                            # Progress Update (10% -> 90%) - Byte-basiert für mehr Genauigkeit
+                            if file_count % 5 == 0 or fsize > (5*1024*1024): 
+                                prog = 10 + int((processed_bytes / total_bytes_est) * 80)
                                 current_job_status["progress"] = min(prog, 90)
                                 
                         except Exception as write_err:
@@ -1366,6 +1379,21 @@ HTML_TEMPLATE = """
                 const res = await resp.json();
                 if (res.status === 'success') {
                     addLog("Kernel: Parameter persistent gespeichert.", "success");
+                    
+                    // Visuelles Feedback auf allen Speicher-Buttons
+                    const buttons = document.getElementsByTagName('button');
+                    for(let btn of buttons) {
+                        if(btn.innerText.toLowerCase().includes("speichern")) {
+                            const original = btn.innerText;
+                            btn.innerText = "ERFOLGREICH GESPEICHERT ✓";
+                            btn.style.color = "#4ade80"; // green-400
+                            setTimeout(() => {
+                                btn.innerText = original;
+                                btn.style.color = ""; 
+                            }, 2000);
+                        }
+                    }
+
                     // Trigger re-load to update history potentially based on new path
                     loadData();
                 } else {
