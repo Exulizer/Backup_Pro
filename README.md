@@ -23,14 +23,22 @@ Es wurde entwickelt, um Web-Projekte und wichtige Verzeichnisse sicher zu archiv
 - **Windows 11**
 - **Python 3.8** oder höher
 
+Überprüfe ob Git installiert ist mit 
+```bash
+git --version
+```
+Sollte das nicht der Fall sein installiere hiermit
+
+```bash
+winget install --id Git.Git -e --source winget
+```
+
 ### Schritt 1: Repository klonen
 ```bash
 git clone https://github.com/Exulizer/Backup_Pro.git && cd Backup_Pro && pip install flask && python backup_app.py
-````
+```
 
-### Schritt 2: Abhängigkeiten installieren
-
-### Schritt 3: Starten
+### Schritt 2: Starten
 
 Die Anwendung startet einen lokalen Server.
 Öffne anschließend deinen Browser unter:
