@@ -47,6 +47,10 @@ Invoke-WebRequest $gitUrl -OutFile $installer
 Start-Process $installer -ArgumentList '/VERYSILENT','/NORESTART','/SP-' -Wait
 Remove-Item $installer
 ```
+### **PyZipper installieren**
+```bash
+pip install pyzipper paramiko
+```
 
 ### **Repository laden & starten**
 ```powershell
