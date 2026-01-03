@@ -82,4 +82,6 @@ Dank des intelligenten Launchers ist das Aktualisieren kinderleicht:
 
 ## **📄 LIZENZ**
 
-**MIT-Lizenz** – Free for everyone.
+### SOFTWARE-LIZENZVEREINBARUNG (PROPRIETÄR) ###
+
+### COPYRIGHT (C) 2026 EXULIZER. ALLE RECHTE VORBEHALTEN. ###
