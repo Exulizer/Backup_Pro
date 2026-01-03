@@ -1,3 +1,4 @@
+
 # 🛡️ Backup OS Pro - Commander Edition
 
 **Backup OS Pro** ist ein leistungsstarkes, hybrides Backup-System für **Windows 11**, das eine intuitive **Weboberfläche (Flask)** mit nativen Systemfunktionen kombiniert.  
@@ -5,7 +6,7 @@ Es wurde entwickelt, um Web-Projekte und wichtige Verzeichnisse sicher zu archiv
 
 ---
 
-## ✨ Features
+## **✨ FEATURES**
 
 - **Snapshot-Engine:** Schnelle Komprimierung von Verzeichnissen in ZIP-Archive unter Verwendung nativer Windows-Bibliotheken.  
 - **Integritäts-Protokoll:** Jedes Backup erhält eine einzigartige SHA256-Signatur (gesalzen mit Zeitstempeln), um Manipulationen oder Datenkorruption auszuschließen.  
@@ -17,48 +18,72 @@ Es wurde entwickelt, um Web-Projekte und wichtige Verzeichnisse sicher zu archiv
 
 ---
 
-## 🚀 Installation
+## **🚀 INSTALLATION**
 
-### Voraussetzungen
+### **Voraussetzungen**
 - **Windows 11**
 - **Python 3.8** oder höher
 
-Überprüfe ob Git installiert ist mit 
-```bash
+### **Git prüfen/installieren**
+```powershell
 git --version
 ```
-Sollte das nicht der Fall sein installiere hiermit
+
+sollte kein Git installiert sein, fahren sie hier fort:
+
+### Linux/WSL (Ubuntu/Debian) empfohlen:
 
 ```bash
-sudo apt update && sudo apt install git
+sudo apt update && sudo apt install git -y
 ```
 
-### Schritt 1: Repository klonen
-```bash
-git clone https://github.com/Exulizer/Backup_Pro.git && cd Backup_Pro && pip install flask && python backup_app.py
+oder
+
+**Git fehlt? Silent-Installation:**
+```powershell
+$gitUrl = "https://github.com/git-for-windows/git/releases/latest/download/Git-2.48.1-64-bit.exe"
+$installer = "$env:TEMP\git-installer.exe"
+Invoke-WebRequest $gitUrl -OutFile $installer
+Start-Process $installer -ArgumentList '/VERYSILENT','/NORESTART','/SP-' -Wait
+Remove-Item $installer
 ```
 
-### Schritt 2: Starten
+### **Repository laden & starten**
+```powershell
+git clone https://github.com/Exulizer/Backup_Pro.git
+cd Backup_Pro
+pip install flask
+python backup_app.py
+```
 
-Die Anwendung startet einen lokalen Server.
-Öffne anschließend deinen Browser unter:
-👉 http://127.0.0.1:5000
+**Ohne Git (ZIP):**
+```powershell
+Invoke-WebRequest "https://github.com/Exulizer/Backup_Pro/archive/refs/heads/main.zip" -OutFile "$env:USERPROFILE\Downloads\Backup_Pro.zip"
+Expand-Archive "$env:USERPROFILE\Downloads\Backup_Pro.zip" "$env:USERPROFILE\Downloads"
+cd "$env:USERPROFILE\Downloads\Backup_Pro-main"; pip install flask; python backup_app.py
+```
+
+### **Browser öffnen**
+👉 **http://127.0.0.1:5000**
 
 <p align="center">
-  <img src="assets/backup_pro.jpg" alt="Backup Pro Screenshot" width="500"><br>
-  <em>Backup Pro – Benutzeroberfläche</em>
+  <img src="assets/backup_pro.jpg" alt="Backup Pro Dashboard" width="800"><br>
+  <em>🛡️ Backup OS Pro Dashboard</em>
 </p>
 
+---
 
-### 🛠️ Konfiguration
-Über den Reiter „Parameter“ in der Sidebar kannst du das System an deine Bedürfnisse anpassen:
+## **🛠️ KONFIGURATION**
 
-Standard-Pfade: Lege feste Quell- und Zielverzeichnisse fest, die bei jedem Start geladen werden.
+### **Parameter-Einstellungen**
+Über **„Parameter"** in der Sidebar:
 
-Retention Count: Bestimme, wie viele Archiv-Generationen aufbewahrt werden sollen (Standard: 10).
+- **Standard-Pfade:** Feste Quell-/Zielverzeichnisse
+- **Retention Count:** Generationen (Standard: `10`)
+- **Integritäts-Check:** SHA256-Hashes + Kopierfunktion
 
-Integrität: Alle Hashes werden im „Backup Register“ gelistet. Ein Klick auf einen Eintrag zeigt die vollständige Signatur inklusive Kopierfunktion an.
+---
 
-### 📄 Lizenz
-Dieses Projekt ist unter der MIT-Lizenz lizenziert.
-Weitere Details findest du in der LICENSE Datei.
+## **📄 LIZENZ**
+
+**MIT-Lizenz** – Siehe [LICENSE](LICENSE)
