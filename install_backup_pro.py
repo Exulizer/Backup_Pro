@@ -188,6 +188,50 @@ class InstallerApp:
             except:
                 return False
 
+    def create_python_launcher(self):
+        try:
+            content = """import glob
+import os
+import sys
+import re
+import subprocess
+import time
+
+def find_latest_app_script():
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(base_dir)
+    pattern = "backup_app_v*.py"
+    files = glob.glob(pattern)
+    if not files: return None
+    def version_key(filename):
+        numbers = re.findall(r'\\d+', filename)
+        if not numbers: return 0
+        return tuple(map(int, numbers))
+    try: return max(files, key=version_key)
+    except: return files[0]
+
+if __name__ == "__main__":
+    print("Suche nach neuester Version...")
+    script = find_latest_app_script()
+    if script:
+        print(f"Starte {script}...")
+        try:
+            cmd = [sys.executable, script] + sys.argv[1:]
+            subprocess.run(cmd, check=False)
+        except Exception as e:
+            print(f"Fehler beim Starten: {e}")
+            time.sleep(5)
+    else:
+        print("FEHLER: Keine App gefunden!")
+        time.sleep(10)
+"""
+            with open("launcher.py", "w") as f:
+                f.write(content)
+            return True
+        except Exception as e:
+            self.log(f"Launcher.py Fehler: {e}", "error")
+            return False
+
     def create_launcher(self):
         try:
             # Der Launcher startet nun das intelligente launcher.py Skript
@@ -334,6 +378,14 @@ if %errorlevel% neq 0 pause
         # 3. Launcher
         self.log("Erstelle Start-Skript...", "info")
         self.root.after(0, lambda: self.progress.configure(value=90))
+        
+        # Erstelle launcher.py
+        if self.create_python_launcher():
+            self.log("launcher.py erstellt.", "success")
+        else:
+            self.log("Fehler beim Erstellen von launcher.py", "error")
+            all_success = False
+
         if self.create_launcher():
             self.log("start_backup_pro.bat erstellt.", "success")
         
