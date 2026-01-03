@@ -45,7 +45,7 @@ Die Anwendung startet einen lokalen Server.
 👉 http://127.0.0.1:5000
 
 <p align="center">
-  <img src="assets/backup_pro.jpg" alt="Backup Pro Screenshot" width="350"><br>
+  <img src="assets/backup_pro.jpg" alt="Backup Pro Screenshot" width="500"><br>
   <em>Backup Pro – Benutzeroberfläche</em>
 </p>
 
