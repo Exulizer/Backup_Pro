@@ -1248,6 +1248,42 @@ HTML_TEMPLATE = """
                     .then(sData => {
                         if(document.getElementById('src-size')) document.getElementById('src-size').innerText = formatSize(sData.size);
                         if(document.getElementById('src-files')) document.getElementById('src-files').innerText = sData.count + " FILES";
+
+                        // Delta Calculation
+                        const deltaVal = document.getElementById('delta-val');
+                        const deltaBadge = document.getElementById('delta-badge');
+                        
+                        if(deltaVal && deltaBadge && globalHistory.length > 0) {
+                            // Sortierung sicherstellen: Wir nehmen an, globalHistory ist chronologisch (letzter Eintrag = aktuellstes Backup)
+                            // Aber da wir es oben reversed haben für die Tabelle, ist globalHistory[globalHistory.length - 1] das aktuellste Backup im Original Array
+                            // Warte, globalHistory ist das rohe Array vom Server.
+                            // Der Server sendet es vermutlich chronologisch (append).
+                            // Prüfen wir load_history() -> append. Ja.
+                            // Also ist der letzte Eintrag das neuste Backup.
+                            
+                            const lastEntry = globalHistory[globalHistory.length - 1];
+                            const lastCount = lastEntry.file_count || 0;
+                            const currentCount = sData.count || 0;
+                            const delta = currentCount - lastCount;
+                            
+                            deltaVal.innerText = (delta > 0 ? "+" : "") + delta;
+                            
+                            if(delta === 0) {
+                                deltaBadge.className = "delta-badge delta-neutral";
+                                deltaBadge.innerText = "Neutral";
+                            } else if(delta > 0) {
+                                deltaBadge.className = "delta-badge delta-plus";
+                                deltaBadge.innerText = "Zunahme";
+                            } else {
+                                deltaBadge.className = "delta-badge delta-minus";
+                                deltaBadge.innerText = "Abnahme";
+                            }
+                        } else if (deltaVal && deltaBadge) {
+                            // Kein Backup vorhanden -> Delta ist quasi alles
+                            deltaVal.innerText = "+" + (sData.count || 0);
+                            deltaBadge.className = "delta-badge delta-plus";
+                            deltaBadge.innerText = "Initial";
+                        }
                     });
             }
             calculateHealth();
@@ -1590,13 +1626,53 @@ def find_duplicates_api():
 
 if __name__ == "__main__":
     ensure_files_exist()
+
+    # Port-Check und dynamische Zuweisung
+    target_port = 5000
+    
+    # Prüfe ob Port 5000 belegt ist
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    result = sock.connect_ex(('127.0.0.1', target_port))
+    sock.close()
+    
+    if result == 0: # Port ist belegt (Verbindung erfolgreich)
+        # Suche nächsten freien Port
+        found_port = target_port + 1
+        while found_port < 65535:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            res = sock.connect_ex(('127.0.0.1', found_port))
+            sock.close()
+            if res != 0: # Port ist frei
+                break
+            found_port += 1
+            
+        # User fragen
+        try:
+            root = tk.Tk()
+            root.withdraw() # Hauptfenster verstecken
+            root.attributes("-topmost", True) # In den Vordergrund
+            
+            msg = (f"Der Standard-Port {target_port} ist bereits belegt.\n\n"
+                   f"Möchten Sie Backup Pro stattdessen auf Port {found_port} starten?")
+            
+            should_switch = messagebox.askyesno("Port belegt", msg, parent=root)
+            root.destroy()
+            
+            if should_switch:
+                target_port = found_port
+            else:
+                sys.exit(0) # Beenden wenn User ablehnt
+        except Exception as e:
+            logger.error(f"Fehler bei Port-Dialog: {e}")
+            # Fallback: Einfach den freien Port nehmen ohne Frage (headless?)
+            target_port = found_port
     
     # Start Scheduler Thread
     scheduler_thread = threading.Thread(target=auto_backup_scheduler, daemon=True)
     scheduler_thread.start()
     
     # Start Webbrowser
-    webbrowser.open("http://127.0.0.1:5000")
+    webbrowser.open(f"http://127.0.0.1:{target_port}")
     
     # Flask Server Start
-    app.run(port=5000, debug=False)
+    app.run(port=target_port, debug=False)

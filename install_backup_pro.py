@@ -308,10 +308,10 @@ if %errorlevel% neq 0 pause
         
         # 1. Port Check
         if self.check_port(APP_PORT):
-            self.log(f"Port {APP_PORT} ist frei.", "success")
+            self.log(f"Standard-Port {APP_PORT} ist frei.", "success")
         else:
-            self.log(f"ACHTUNG: Port {APP_PORT} ist belegt!", "warn")
-            self.log("Die App startet eventuell nicht korrekt.", "warn")
+            self.log(f"Info: Port {APP_PORT} ist belegt.", "warn")
+            self.log("Backup Pro wird beim Start einen alternativen Port suchen.", "info")
         
         # 2. Dependencies
         self.log("Installiere Python-Bibliotheken...", "info")
