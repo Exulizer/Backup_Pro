@@ -44,6 +44,12 @@ Die Anwendung startet einen lokalen Server.
 Öffne anschließend deinen Browser unter:
 👉 http://127.0.0.1:5000
 
+<p align="center">
+  <img src="assets/backup_pro.jpg" alt="Backup Pro Screenshot" width="350"><br>
+  <em>Backup Pro – Benutzeroberfläche</em>
+</p>
+
+
 ### 🛠️ Konfiguration
 Über den Reiter „Parameter“ in der Sidebar kannst du das System an deine Bedürfnisse anpassen:
 
