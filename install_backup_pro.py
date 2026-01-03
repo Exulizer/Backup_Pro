@@ -10,6 +10,7 @@ import urllib.request
 import ssl
 import glob
 import re
+import json
 
 # Lazy Imports für optionale Module (verhindert Crash beim Start)
 # import winshell
@@ -275,16 +276,19 @@ if %errorlevel% neq 0 pause
             return False
 
     def download_from_github(self):
-        target = "backup_app.py"
         self.log(f"Starte Download von GitHub...", "info")
         
-        # Liste möglicher URLs (Branches: main/master, Dateinamen: backup_app.py/backup_app_v7_1.py)
+        # Liste von (URL, Ziel-Dateiname)
+        # Priorisiere v7_1 und behalte den Dateinamen bei
         base_url = "https://raw.githubusercontent.com/Exulizer/Backup_Pro"
         candidates = [
-            f"{base_url}/main/backup_app.py",
-            f"{base_url}/master/backup_app.py",
-            f"{base_url}/main/backup_app_v7_1.py",
-            f"{base_url}/master/backup_app_v7_1.py"
+            (f"{base_url}/main/backup_app_v7_1.py", "backup_app_v7_1.py"),
+            (f"{base_url}/master/backup_app_v7_1.py", "backup_app_v7_1.py"),
+            # Fallback: Falls v7_1 nicht da ist, versuche backup_app.py, aber nenne es backup_app_fallback.py oder ähnlich?
+            # User sagt "geht ab v7_1 los", also sollten wir v7_1 erwarten.
+            # Wenn wir backup_app.py laden, nennen wir es auch so.
+            (f"{base_url}/main/backup_app.py", "backup_app.py"),
+            (f"{base_url}/master/backup_app.py", "backup_app.py")
         ]
         
         self.btn_download.config(state="disabled")
@@ -293,13 +297,14 @@ if %errorlevel% neq 0 pause
         def _download():
             success = False
             last_error = None
+            downloaded_file = None
             
-            # SSL Context für unverified HTTPS (falls nötig)
+            # SSL Context
             ctx = ssl.create_default_context()
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
             
-            for url in candidates:
+            for url, filename in candidates:
                 try:
                     self.root.after(0, lambda u=url: self.log(f"Versuche: {u}...", "info"))
                     with urllib.request.urlopen(url, context=ctx) as response:
@@ -308,7 +313,7 @@ if %errorlevel% neq 0 pause
                             downloaded = 0
                             chunk_size = 8192
                             
-                            with open(target, 'wb') as out_file:
+                            with open(filename, 'wb') as out_file:
                                 while True:
                                     chunk = response.read(chunk_size)
                                     if not chunk:
@@ -318,21 +323,20 @@ if %errorlevel% neq 0 pause
                                     
                                     if total_size > 0:
                                         percent = (downloaded / total_size) * 100
-                                        # UI Update (Thread-safe via after)
                                         self.root.after(0, lambda p=percent: self.progress.configure(value=p))
                                         
                             success = True
+                            downloaded_file = filename
                             break
                 except Exception as e:
                     last_error = e
-                    # Continue to next candidate
             
             if success:
-                self.root.after(0, lambda: self.log(f"Download erfolgreich: {target}", "success"))
-                self.root.after(0, lambda: messagebox.showinfo("Download", "Die App wurde erfolgreich heruntergeladen!"))
+                self.root.after(0, lambda: self.log(f"Download erfolgreich: {downloaded_file}", "success"))
+                self.root.after(0, lambda: messagebox.showinfo("Download", f"Die App ({downloaded_file}) wurde erfolgreich heruntergeladen!"))
             else:
                 self.root.after(0, lambda: self.log(f"Download fehlgeschlagen.", "error"))
-                self.root.after(0, lambda: messagebox.showerror("Fehler", f"Konnte Datei nicht finden.\nLetzter Fehler: {last_error}\n\nBitte prüfen Sie, ob die Datei 'backup_app.py' auf GitHub (main/master) existiert."))
+                self.root.after(0, lambda: messagebox.showerror("Fehler", f"Konnte keine gültige App-Datei finden.\nLetzter Fehler: {last_error}"))
 
             self.root.after(0, lambda: self.btn_download.config(state="normal"))
             self.root.after(0, self.progress.stop)
