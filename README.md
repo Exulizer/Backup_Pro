@@ -30,7 +30,7 @@ git --version
 Sollte das nicht der Fall sein installiere hiermit
 
 ```bash
-winget install --id Git.Git -e --source winget
+sudo apt update && sudo apt install git
 ```
 
 ### Schritt 1: Repository klonen
