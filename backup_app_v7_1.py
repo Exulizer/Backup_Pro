@@ -5,11 +5,13 @@ import webbrowser
 import json
 import time
 import zipfile
+import pyzipper
 import fnmatch
 import subprocess
 import threading
 import logging
 import errno
+import paramiko
 from datetime import datetime
 from collections import defaultdict
 from flask import Flask, render_template_string, jsonify, request
@@ -24,6 +26,20 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Globaler Status für Async-Jobs
+current_job_status = {
+    "active": False,
+    "progress": 0,
+    "step": "idle",
+    "message": "",
+    "result": None
+}
+backup_lock = threading.Lock()
+
+# Re-Indexing Status
+reindexing_lock = threading.Lock()
+reindexing_active = False
 
 app = Flask(__name__)
 
@@ -51,6 +67,8 @@ def ensure_files_exist():
                 "safety_snapshots": True,
                 "auto_interval": 0, # In Minuten, 0 = Aus
                 "auto_backup_enabled": False,
+                "encryption_enabled": False,
+                "encryption_password": "",
                 "cloud_sync_enabled": False,
                 "cloud_provider": "SFTP",
                 "cloud_user": "",
@@ -113,8 +131,8 @@ def calculate_sha256(file_path, salt=""):
         if not os.path.exists(file_path):
             return "FILE_NOT_FOUND"
         with open(file_path, "rb") as f:
-            # Erhöhte Blockgröße für bessere Performance beim Hashing
-            for byte_block in iter(lambda: f.read(65536), b""):
+            # Erhöhte Blockgröße (1MB) für bessere Performance beim Hashing moderner SSDs
+            for byte_block in iter(lambda: f.read(1024 * 1024), b""):
                 sha256_hash.update(byte_block)
         return sha256_hash.hexdigest()
     except Exception as e:
@@ -171,6 +189,84 @@ def load_history():
         logger.error(f"Fehler beim Laden der Historie: {e}")
         return []
 
+def sync_history_with_disk(dest_path):
+    """
+    Synchronisiert die JSON-Historie mit den tatsächlichen Dateien auf der Festplatte.
+    Fügt fehlende ZIPs hinzu (Re-Indexing) und entfernt Einträge von gelöschten Dateien.
+    """
+    if not dest_path or not os.path.exists(dest_path):
+        return
+    
+    history = load_history()
+    disk_files = set()
+    
+    # 1. Scanne Disk nach validen Backups
+    try:
+        for f in os.listdir(dest_path):
+            if f.startswith("backup_") and f.endswith(".zip"):
+                disk_files.add(f)
+    except OSError:
+        return
+
+    history_map = {entry['filename']: entry for entry in history}
+    changed = False
+
+    # 2. Entferne Einträge aus History, die nicht mehr auf Disk sind
+    to_remove = []
+    for filename in history_map:
+        if filename not in disk_files:
+            to_remove.append(filename)
+    
+    if to_remove:
+        history = [h for h in history if h['filename'] not in to_remove]
+        changed = True
+        logger.info(f"Sync: {len(to_remove)} verwaiste Einträge entfernt.")
+
+    # 3. Füge neue Dateien von Disk zur History hinzu
+    for filename in disk_files:
+        if filename not in history_map:
+            # Versuche Metadaten zu rekonstruieren
+            full_path = os.path.join(dest_path, filename)
+            try:
+                # Timestamp aus Dateinamen parsen: backup_YYYY-MM-DD_HH-MM-SS.zip
+                # Format: backup_2025-01-03_19-55-12.zip
+                ts_part = filename.replace("backup_", "").replace(".zip", "")
+                # Versuche Format zu parsen
+                try:
+                    dt = datetime.strptime(ts_part, "%Y-%m-%d_%H-%M-%S")
+                    timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    # Fallback auf File Mtime
+                    timestamp = datetime.fromtimestamp(os.path.getmtime(full_path)).strftime("%Y-%m-%d %H:%M:%S")
+                
+                size = os.path.getsize(full_path)
+                
+                # Hash berechnen (kann dauern, aber wichtig für Integrität)
+                # Um UI nicht zu blockieren bei vielen Files, könnten wir hier optimieren.
+                # Aber User will Telemetrie. Wir berechnen Hash.
+                sha256 = calculate_sha256(full_path)
+                
+                new_entry = {
+                    "filename": filename,
+                    "timestamp": timestamp,
+                    "size": size,
+                    "sha256": sha256,
+                    "comment": "Re-Indexed / Extern erkannt"
+                }
+                history.append(new_entry)
+                changed = True
+                logger.info(f"Sync: Datei {filename} indexiert.")
+            except Exception as e:
+                logger.error(f"Fehler beim Indexieren von {filename}: {e}")
+
+    # 4. Speichern wenn Änderungen
+    if changed:
+        # Sortieren nach Timestamp
+        try:
+            history.sort(key=lambda x: x['timestamp'])
+        except: pass
+        safe_write_json(HISTORY_FILE, history)
+
 def load_config():
     """Lädt die Konfiguration mit Fehlerprüfung."""
     if not os.path.exists(CONFIG_FILE):
@@ -190,7 +286,19 @@ def run_backup_logic(source, dest, comment="Automatisches Backup"):
     Zentrale Engine für den Backup-Vorgang.
     Aufgeteilt in Validierung, Archivierung und Post-Processing.
     """
+    global current_job_status
+    
+    # Versuche Lock zu bekommen
+    if not backup_lock.acquire(blocking=False):
+        logger.warning("Backup läuft bereits. Abgelehnt.")
+        return {"status": "error", "message": "Backup läuft bereits."}
+
     try:
+        # Status Initialisierung
+        current_job_status.update({
+            "active": True, "progress": 0, "step": "init", "message": "Initialisiere Backup...", "result": None
+        })
+        
         # 1. Validierung
         if not os.path.exists(source):
             return {"status": "error", "message": f"Quellpfad existiert nicht: {source}"}
@@ -198,10 +306,23 @@ def run_backup_logic(source, dest, comment="Automatisches Backup"):
             try: os.makedirs(dest)
             except: return {"status": "error", "message": "Zielpfad konnte nicht erstellt werden."}
 
+        # Pre-Flight Check: Speicherplatz
+        try:
+            _, _, free_space = shutil.disk_usage(dest)
+            if free_space < (500 * 1024 * 1024): # Warnung unter 500MB
+                logger.warning("Kritischer Speicherplatzmangel auf Zielmedium!")
+                current_job_status["message"] = "WARNUNG: Wenig Speicherplatz!"
+                # Wir brechen hier nicht hart ab, aber warnen
+        except: pass
+
         config = load_config()
         limit = config.get("retention_count", 10)
         exclusions_raw = config.get("exclusions", "")
         exclusions = [x.strip() for x in exclusions_raw.split(",") if x.strip()]
+        
+        # Verschlüsselung laden
+        enc_enabled = config.get("encryption_enabled", False)
+        enc_pw = config.get("encryption_password", "")
         
         # Zeitstempel generieren
         now = datetime.now()
@@ -211,11 +332,31 @@ def run_backup_logic(source, dest, comment="Automatisches Backup"):
         zip_path = os.path.join(dest, zip_filename)
         
         # 2. Archivierung
+        current_job_status.update({"step": "archiving", "message": "Analysiere Dateistruktur...", "progress": 5})
+        
         file_count = 0
+        total_files_est = 0
+        
+        # Grobe Schätzung für Progress Bar
+        for r, _, f in os.walk(source):
+            total_files_est += len(f)
+        if total_files_est == 0: total_files_est = 1
+        
         logger.info(f"Starte Archivierung von {source} nach {zip_path}")
         
-        # Verwende ZIP_DEFLATED für Kompression
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as zipf:
+        current_job_status.update({"message": f"Archiviere {total_files_est} Dateien...", "progress": 10})
+        
+        # Verwende ZIP_DEFLATED für Kompression, optional AES-Verschlüsselung
+        if enc_enabled and enc_pw:
+            logger.info("Verschlüsselung (AES) aktiviert.")
+            # pyzipper verwenden für AES
+            zip_ctx = pyzipper.AESZipFile(zip_path, 'w', compression=pyzipper.ZIP_DEFLATED, encryption=pyzipper.WZ_AES)
+            zip_ctx.setpassword(enc_pw.encode('utf-8'))
+        else:
+            # Standard zipfile
+            zip_ctx = zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=6)
+
+        with zip_ctx as zipf:
             for root, dirs, files in os.walk(source):
                 # In-place Filterung der Verzeichnisse (Ausschlüsse)
                 dirs[:] = [d for d in dirs if not is_excluded(d, exclusions)]
@@ -227,16 +368,65 @@ def run_backup_logic(source, dest, comment="Automatisches Backup"):
                         try:
                             zipf.write(full_file_path, relative_path)
                             file_count += 1
+                            
+                            # Progress Update (10% -> 90%)
+                            if file_count % 10 == 0: # Nicht zu oft updaten
+                                prog = 10 + int((file_count / total_files_est) * 80)
+                                current_job_status["progress"] = min(prog, 90)
+                                
                         except Exception as write_err:
                             logger.warning(f"Konnte Datei {file} nicht in ZIP schreiben: {write_err}")
         
         # 3. Post-Processing (Hashing & Historie)
+        current_job_status.update({"step": "hashing", "message": "Berechne Integritäts-Hash...", "progress": 92})
         sha = calculate_sha256(zip_path, salt=ts)
         zip_size = os.path.getsize(zip_path)
         
-        # Alte Backups aufräumen
+        current_job_status.update({"step": "retention", "message": "Bereinige Historie...", "progress": 98})
         apply_retention(dest, limit)
         
+        # Cloud Upload (SFTP)
+        cloud_enabled = config.get("cloud_sync_enabled", False)
+        if cloud_enabled and config.get("cloud_provider") == "SFTP":
+            try:
+                current_job_status.update({"step": "cloud", "message": "Lade in Cloud hoch (SFTP)...", "progress": 95})
+                
+                c_host = config.get("cloud_host", "") # Muss noch in Config GUI
+                c_user = config.get("cloud_user", "")
+                c_pass = config.get("cloud_password", "")
+                c_path = config.get("cloud_target_path", "/backups")
+                
+                # Wir parsen host aus der Config, da wir aktuell kein Feld dafür haben
+                # Fallback: Versuche Host aus Pfad oder User zu erraten ist unsicher.
+                # Wir brauchen ein Host-Feld. Bis dahin: Log only
+                
+                # Wenn API Key Feld als Host missbraucht wird (Workaround)
+                c_host_workaround = config.get("cloud_api_key", "") 
+                
+                if c_host_workaround and c_user:
+                    ssh = paramiko.SSHClient()
+                    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                    ssh.connect(c_host_workaround, username=c_user, password=c_pass)
+                    
+                    sftp = ssh.open_sftp()
+                    # Stelle sicher, dass Remote-Ordner existiert (einfacher Check)
+                    try: sftp.chdir(c_path)
+                    except: 
+                        try: sftp.mkdir(c_path)
+                        except: pass
+                    
+                    remote_file = os.path.join(c_path, zip_filename).replace("\\", "/")
+                    sftp.put(zip_path, remote_file)
+                    sftp.close()
+                    ssh.close()
+                    logger.info("SFTP Upload erfolgreich.")
+                else:
+                    logger.warning("Cloud Upload übersprungen: Host (in API-Key Feld) fehlt.")
+                    
+            except Exception as cloud_err:
+                logger.error(f"Cloud Upload fehlgeschlagen: {cloud_err}")
+                # Kein Abbruch des Gesamt-Backups, nur Log
+
         # Historie aktualisieren
         history = load_history()
         history.append({
@@ -254,13 +444,21 @@ def run_backup_logic(source, dest, comment="Automatisches Backup"):
             
         if safe_write_json(HISTORY_FILE, history):
             logger.info(f"Backup erfolgreich abgeschlossen: {zip_filename}")
-            return {"status": "success", "file": zip_filename, "sha256": sha}
+            res = {"status": "success", "file": zip_filename, "sha256": sha}
+            current_job_status.update({"active": False, "progress": 100, "step": "done", "message": "Fertig", "result": res})
+            return res
         else:
-            return {"status": "error", "message": "Backup erstellt, aber Historie konnte nicht gespeichert werden."}
+            res = {"status": "error", "message": "Backup erstellt, aber Historie konnte nicht gespeichert werden."}
+            current_job_status.update({"active": False, "result": res})
+            return res
 
     except Exception as e:
         logger.error(f"Kritischer Fehler in run_backup_logic: {e}")
-        return {"status": "error", "message": str(e)}
+        res = {"status": "error", "message": str(e)}
+        current_job_status.update({"active": False, "step": "error", "message": str(e), "result": res})
+        return res
+    finally:
+        backup_lock.release()
 
 # --- Auto-Backup Scheduler Thread ---
 
@@ -623,8 +821,20 @@ HTML_TEMPLATE = """
                         </div>
                     </div>
                     <div>
-                         <label class="text-[10px] font-black uppercase text-slate-500 mb-2 block tracking-widest">API-Key (Optional)</label>
-                         <input type="text" id="config-cloud-api-key" class="w-full bg-[#08090d] border border-white/5 rounded p-2 text-xs text-blue-400 outline-none focus:border-blue-500 mono">
+                         <label class="text-[10px] font-black uppercase text-slate-500 mb-2 block tracking-widest">Server Host (nur SFTP) / API-Key</label>
+                         <input type="text" id="config-cloud-api-key" placeholder="z.B. 192.168.1.100 oder sftp.example.com" class="w-full bg-[#08090d] border border-white/5 rounded p-2 text-xs text-blue-400 outline-none focus:border-blue-500 mono">
+                    </div>
+                </div>
+
+                <div class="bg-black/20 p-5 rounded-xl border border-white/5 space-y-4">
+                    <h3 class="text-[11px] font-black uppercase text-slate-400 border-b border-white/5 pb-2">Sicherheit</h3>
+                    <div class="flex items-center gap-4">
+                        <input type="checkbox" id="config-enc-enabled" class="w-4 h-4 bg-[#08090d] border-white/10 rounded">
+                        <label for="config-enc-enabled" class="text-[11px] font-bold text-white uppercase tracking-wider">AES-256 Verschlüsselung aktivieren</label>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-slate-500 mb-2 block tracking-widest">Encryption Password</label>
+                        <input type="password" id="config-enc-password" placeholder="Sicheres Passwort für das Archiv..." class="w-full bg-[#08090d] border border-white/5 rounded p-2 text-xs text-yellow-500 outline-none focus:border-yellow-500">
                     </div>
                 </div>
 
@@ -765,6 +975,47 @@ HTML_TEMPLATE = """
         let autoBackupEnabled = false;
         let globalUnit = 'MB';
 
+        function updateAutoToggleUI() {
+            const knob = document.getElementById('auto-toggle-knob');
+            if(autoBackupEnabled) {
+                knob.style.left = '24px';
+                knob.style.backgroundColor = '#0084ff';
+            } else {
+                knob.style.left = '4px';
+                knob.style.backgroundColor = '#64748b';
+            }
+        }
+
+        function toggleAutoBackup() {
+            autoBackupEnabled = !autoBackupEnabled;
+            updateAutoToggleUI();
+        }
+
+        async function loadConfigUI() {
+            const resp = await fetch('/api/get_config');
+            const conf = await resp.json();
+            
+            // Bestehende Felder
+            if(document.getElementById('config-source')) document.getElementById('config-source').value = conf.default_source || "";
+            if(document.getElementById('config-dest')) document.getElementById('config-dest').value = conf.default_dest || "";
+            if(document.getElementById('config-retention')) document.getElementById('config-retention').value = conf.retention_count || 10;
+            if(document.getElementById('config-auto-interval')) document.getElementById('config-auto-interval').value = conf.auto_interval || 0;
+            
+            autoBackupEnabled = conf.auto_backup_enabled || false;
+            updateAutoToggleUI();
+            
+            // Cloud Felder
+            if(document.getElementById('config-cloud-provider')) document.getElementById('config-cloud-provider').value = conf.cloud_provider || "SFTP";
+            if(document.getElementById('config-cloud-path')) document.getElementById('config-cloud-path').value = conf.cloud_target_path || "";
+            if(document.getElementById('config-cloud-user')) document.getElementById('config-cloud-user').value = conf.cloud_user || "";
+            if(document.getElementById('config-cloud-password')) document.getElementById('config-cloud-password').value = conf.cloud_password || "";
+            if(document.getElementById('config-cloud-api-key')) document.getElementById('config-cloud-api-key').value = conf.cloud_api_key || "";
+            
+            // Encryption Felder
+            if(document.getElementById('config-enc-enabled')) document.getElementById('config-enc-enabled').checked = conf.encryption_enabled || false;
+            if(document.getElementById('config-enc-password')) document.getElementById('config-enc-password').value = conf.encryption_password || "";
+        }
+
         function updateHeaderClock() {
             const now = new Date();
             const timeStr = now.toLocaleTimeString('de-DE', { hour12: false });
@@ -806,18 +1057,6 @@ HTML_TEMPLATE = """
             document.getElementById('nav-' + tabId).classList.add('active');
             if(tabId === 'dashboard' && storageChart) {
                 setTimeout(() => { storageChart.resize(); storageChart.update(); }, 100);
-            }
-        }
-
-        function toggleAutoBackup() {
-            autoBackupEnabled = !autoBackupEnabled;
-            const knob = document.getElementById('auto-toggle-knob');
-            if(autoBackupEnabled) {
-                knob.style.left = '24px';
-                knob.style.backgroundColor = '#0084ff';
-            } else {
-                knob.style.left = '4px';
-                knob.style.backgroundColor = '#64748b';
             }
         }
 
@@ -926,23 +1165,15 @@ HTML_TEMPLATE = """
 
         async function loadData() {
             try {
+                // UI Felder aus Config laden
+                await loadConfigUI();
+                
                 const cResp = await fetch('/api/get_config');
                 const config = await cResp.json();
                 currentLimit = config.retention_count || 10;
                 
                 document.getElementById('source').value = config.default_source || "";
                 document.getElementById('dest').value = config.default_dest || "";
-                document.getElementById('config-source').value = config.default_source || "";
-                document.getElementById('config-dest').value = config.default_dest || "";
-                document.getElementById('config-retention').value = currentLimit;
-                document.getElementById('config-auto-interval').value = config.auto_interval || 0;
-                
-                // Cloud Felder
-                document.getElementById('config-cloud-provider').value = config.cloud_provider || "SFTP";
-                document.getElementById('config-cloud-path').value = config.cloud_target_path || "";
-                document.getElementById('config-cloud-user').value = config.cloud_user || "";
-                document.getElementById('config-cloud-password').value = config.cloud_password || "";
-                document.getElementById('config-cloud-api-key').value = config.cloud_api_key || "";
                 
                 const badge = document.getElementById('cloud-status-badge');
                 if(config.cloud_user && (config.cloud_password || config.cloud_api_key)) {
@@ -951,7 +1182,7 @@ HTML_TEMPLATE = """
                     badge.classList.replace('bg-yellow-500/10', 'bg-emerald-500/10');
                     badge.classList.replace('border-yellow-500/20', 'border-emerald-500/20');
                 }
-
+                
                 if(config.auto_backup_enabled && !autoBackupEnabled) toggleAutoBackup();
 
                 const hResp = await fetch('/api/get_history');
@@ -1024,31 +1255,52 @@ HTML_TEMPLATE = """
             const dest = document.getElementById('dest').value;
             if(!source || !dest) return addLog("Pfade fehlen!", "error");
             
-            addLog("Kernel: Snapshot-Vorbereitung...", "info");
+            addLog("Kernel: Initiiere Hintergrund-Job...", "info");
             document.getElementById('zipProgressArea').classList.remove('hidden');
+            document.getElementById('zipPercent').innerText = "0%";
+            document.getElementById('zipBar').style.width = "0%";
             
-            let progress = 0;
-            const zipTimer = setInterval(() => {
-                if(progress < 90) {
-                    progress += Math.random() * 8;
-                    document.getElementById('zipBar').style.width = Math.round(progress) + "%";
+            try {
+                const resp = await fetch('/api/start_backup', { 
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({source, dest, comment: document.getElementById('snap-comment').value}) 
+                });
+                const data = await resp.json();
+                
+                if(data.status === 'error') {
+                     addLog("Start Fehler: " + data.message, "error");
+                     document.getElementById('zipProgressArea').classList.add('hidden');
+                     return;
                 }
-            }, 300);
-            
-            const resp = await fetch('/api/start_backup', { 
-                method: 'POST', headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({source, dest, comment: document.getElementById('snap-comment').value}) 
-            });
-            const data = await resp.json();
-            
-            clearInterval(zipTimer);
-            if(data.status === 'success') {
-                document.getElementById('zipBar').style.width = "100%";
-                addLog("Kernel: Snapshot erfolgreich abgeschlossen.", "success");
-                loadData();
-                setTimeout(() => document.getElementById('zipProgressArea').classList.add('hidden'), 3000);
-            } else {
-                addLog("Kernel Error: " + data.message, "error");
+                
+                // Polling starten
+                const pollTimer = setInterval(async () => {
+                    try {
+                        const sResp = await fetch('/api/get_backup_status');
+                        const sData = await sResp.json();
+                        
+                        document.getElementById('zipBar').style.width = sData.progress + "%";
+                        document.getElementById('zipPercent').innerText = sData.progress + "%";
+                        
+                        if(!sData.active) {
+                            clearInterval(pollTimer);
+                            if(sData.result && sData.result.status === 'success') {
+                                addLog("Kernel: Snapshot erfolgreich abgeschlossen.", "success");
+                                loadData();
+                                setTimeout(() => document.getElementById('zipProgressArea').classList.add('hidden'), 3000);
+                            } else {
+                                 const msg = sData.result ? sData.result.message : (sData.message || "Unbekannter Fehler");
+                                 addLog("Kernel Error: " + msg, "error");
+                                 document.getElementById('zipProgressArea').classList.add('hidden');
+                            }
+                        }
+                    } catch(e) {
+                        console.error("Polling error", e);
+                    }
+                }, 1000);
+
+            } catch(e) {
+                addLog("Netzwerk Fehler: " + e, "error");
                 document.getElementById('zipProgressArea').classList.add('hidden');
             }
         }
@@ -1104,11 +1356,24 @@ HTML_TEMPLATE = """
                 cloud_target_path: document.getElementById('config-cloud-path').value,
                 cloud_user: document.getElementById('config-cloud-user').value,
                 cloud_password: document.getElementById('config-cloud-password').value,
-                cloud_api_key: document.getElementById('config-cloud-api-key').value
+                cloud_api_key: document.getElementById('config-cloud-api-key').value,
+                // Encryption
+                encryption_enabled: document.getElementById('config-enc-enabled').checked,
+                encryption_password: document.getElementById('config-enc-password').value
             };
-            await fetch('/api/save_config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(conf) });
-            addLog("Kernel: Parameter persistent gespeichert.", "info");
-            loadData();
+            try {
+                const resp = await fetch('/api/save_config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(conf) });
+                const res = await resp.json();
+                if (res.status === 'success') {
+                    addLog("Kernel: Parameter persistent gespeichert.", "success");
+                    // Trigger re-load to update history potentially based on new path
+                    loadData();
+                } else {
+                    addLog("Fehler beim Speichern: " + (res.message || "Unbekannt"), "error");
+                }
+            } catch (e) {
+                addLog("Kommunikationsfehler beim Speichern.", "error");
+            }
         }
 
         function copyHash() {
@@ -1134,8 +1399,37 @@ def index():
 def get_config_api():
     return jsonify(load_config())
 
+def run_async_reindex(dest):
+    """Wrapper für Re-Indexing im Hintergrund."""
+    global reindexing_active
+    
+    # Schneller Check ohne Lock
+    if reindexing_active: 
+        return
+
+    with reindexing_lock:
+        if reindexing_active:
+            return
+        reindexing_active = True
+    
+    try:
+        # Kurze Pause, damit der Request-Response-Cycle für die UI erstmal durchgeht
+        time.sleep(0.5)
+        sync_history_with_disk(dest)
+    except Exception as e:
+        logger.error(f"Async Re-Index Fehler: {e}")
+    finally:
+        reindexing_active = False
+
 @app.route("/api/get_history")
 def get_history_api():
+    # Auto-Sync asynchron starten, um UI nicht zu blockieren
+    config = load_config()
+    dest = config.get("default_dest")
+    
+    if dest and not reindexing_active:
+        threading.Thread(target=run_async_reindex, args=(dest,), daemon=True).start()
+        
     return jsonify(load_history())
 
 @app.route("/api/get_disk_stats", methods=["POST"])
@@ -1188,7 +1482,19 @@ def analyze_source():
 def start_backup():
     data = request.json
     source, dest, comment = data.get("source"), data.get("dest"), data.get("comment", "")
-    return jsonify(run_backup_logic(source, dest, comment))
+    
+    if current_job_status["active"]:
+        return jsonify({"status": "error", "message": "Backup läuft bereits."})
+        
+    # Thread starten
+    thread = threading.Thread(target=run_backup_logic, args=(source, dest, comment))
+    thread.start()
+    
+    return jsonify({"status": "started", "message": "Backup im Hintergrund gestartet."})
+
+@app.route("/api/get_backup_status")
+def get_backup_status():
+    return jsonify(current_job_status)
 
 @app.route("/api/restore_backup", methods=["POST"])
 def restore_backup():
