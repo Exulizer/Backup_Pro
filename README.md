@@ -25,16 +25,11 @@ Es wurde entwickelt, um Web-Projekte und wichtige Verzeichnisse sicher zu archiv
 
 ### Schritt 1: Repository klonen
 ```bash
-git clone https://github.com/Exulizer/Backup_Pro.git
-cd Backup_Pro
-```
+git clone https://github.com/Exulizer/Backup_Pro.git && cd Backup_Pro && pip install flask && python backup_app.py
+````
+
 ### Schritt 2: Abhängigkeiten installieren
 
-Die Anwendung nutzt Flask für das Backend-Interface.
-Zusätzliche Bibliotheken wie tkinter sind in Standard-Python-Installationen für Windows bereits enthalten.
-``` 
-pip install flask
-```
 ### Schritt 3: Starten
 
 Die Anwendung startet einen lokalen Server.
