@@ -256,13 +256,17 @@ if %errorlevel% neq 0 pause
             return False
 
     def create_shortcut(self):
+        # Versuche zuerst die COM Methode
         try:
             import winshell
             from win32com.client import Dispatch
             import pythoncom
             
             # Initialisiere COM für diesen Thread
-            pythoncom.CoInitialize()
+            try:
+                pythoncom.CoInitialize()
+            except:
+                pass
             
             desktop = winshell.desktop()
             path = os.path.join(desktop, f"{APP_NAME}.lnk")
@@ -276,7 +280,38 @@ if %errorlevel% neq 0 pause
             shortcut.save()
             return True
         except Exception as e:
-            self.log(f"Shortcut Fehler: {e}", "error")
+            self.log(f"COM Shortcut Fehler: {e}. Versuche VBS Fallback...", "warn")
+            return self.create_shortcut_vbs()
+
+    def create_shortcut_vbs(self):
+        """Fallback Methode mittels VBScript, falls pywin32/COM fehlschlägt"""
+        try:
+            vbs_script = "create_shortcut.vbs"
+            target = os.path.join(os.getcwd(), "start_backup_pro.bat")
+            # Desktop Pfad via VBS ermitteln ist sicherer als Annahmen
+            
+            vbs_content = f"""
+Set oWS = WScript.CreateObject("WScript.Shell")
+sLinkFile = oWS.SpecialFolders("Desktop") & "\\{APP_NAME}.lnk"
+Set oLink = oWS.CreateShortcut(sLinkFile)
+oLink.TargetPath = "{target}"
+oLink.WorkingDirectory = "{os.getcwd()}"
+oLink.IconLocation = "{sys.executable}"
+oLink.Save
+"""
+            with open(vbs_script, "w") as f:
+                f.write(vbs_content)
+                
+            # Ausführen
+            subprocess.run(["cscript", "//Nologo", vbs_script], check=True)
+            
+            # Aufräumen
+            if os.path.exists(vbs_script):
+                os.remove(vbs_script)
+                
+            return True
+        except Exception as e:
+            self.log(f"VBS Shortcut Fehler: {e}", "error")
             return False
 
     def download_from_github(self):
