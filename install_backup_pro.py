@@ -314,22 +314,56 @@ oLink.Save
             self.log(f"VBS Shortcut Fehler: {e}", "error")
             return False
 
+    def get_latest_version_from_api(self):
+        """Fragt die GitHub API nach der neuesten Version im 'version' Ordner ab."""
+        # API URL für den Inhalt des 'version' Ordners
+        api_url = "https://api.github.com/repos/Exulizer/Backup_Pro/contents/version"
+        
+        try:
+            self.log(f"Prüfe auf Updates via API: {api_url}", "info")
+            
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            
+            # User-Agent ist oft erforderlich für GitHub API
+            req = urllib.request.Request(api_url, headers={'User-Agent': 'BackupPro-Installer'})
+            
+            with urllib.request.urlopen(req, context=ctx) as response:
+                if response.getcode() == 200:
+                    data = json.loads(response.read().decode())
+                    
+                    version_files = []
+                    for item in data:
+                        name = item.get("name", "")
+                        # Prüfe auf Muster backup_app_vX_Y.py
+                        if name.startswith("backup_app_v") and name.endswith(".py"):
+                            numbers = re.findall(r'\d+', name)
+                            if numbers:
+                                # Konvertiere Versionstuple für korrekten Vergleich
+                                ver = tuple(map(int, numbers))
+                                version_files.append((ver, item))
+                    
+                    if not version_files:
+                        self.log("Keine Versionen im 'version' Ordner gefunden.", "warn")
+                        return None
+                        
+                    # Sortiere absteigend (neueste zuerst)
+                    version_files.sort(key=lambda x: x[0], reverse=True)
+                    latest_ver, latest_item = version_files[0]
+                    
+                    self.log(f"Neueste gefundene Version: {latest_item['name']} (v{'.'.join(map(str, latest_ver))})", "success")
+                    
+                    return {
+                        "url": latest_item["download_url"], # Raw download URL
+                        "name": latest_item["name"]
+                    }
+        except Exception as e:
+            self.log(f"API Check fehlgeschlagen: {e}", "warn")
+            return None
+
     def download_from_github(self):
-        self.log(f"Starte Download von GitHub...", "info")
-        
-        # Liste von (URL, Ziel-Dateiname)
-        # Priorisiere v7_1 und behalte den Dateinamen bei
-        base_url = "https://raw.githubusercontent.com/Exulizer/Backup_Pro"
-        candidates = [
-            (f"{base_url}/main/backup_app_v7_1.py", "backup_app_v7_1.py"),
-            (f"{base_url}/master/backup_app_v7_1.py", "backup_app_v7_1.py"),
-            # Fallback: Falls v7_1 nicht da ist, versuche backup_app.py, aber nenne es backup_app_fallback.py oder ähnlich?
-            # User sagt "geht ab v7_1 los", also sollten wir v7_1 erwarten.
-            # Wenn wir backup_app.py laden, nennen wir es auch so.
-            (f"{base_url}/main/backup_app.py", "backup_app.py"),
-            (f"{base_url}/master/backup_app.py", "backup_app.py")
-        ]
-        
+        self.log(f"Starte Download-Prozess...", "info")
         self.btn_download.config(state="disabled")
         self.progress.start(10)
         
@@ -338,6 +372,22 @@ oLink.Save
             last_error = None
             downloaded_file = None
             
+            # 1. Versuche dynamisch die neueste Version via API zu holen
+            target_info = self.get_latest_version_from_api()
+            
+            candidates = []
+            if target_info:
+                # API Treffer -> Priorität 1
+                candidates.append((target_info["url"], target_info["name"]))
+            else:
+                # Fallbacks falls API failt (alter Pfad oder Root)
+                base_url = "https://raw.githubusercontent.com/Exulizer/Backup_Pro"
+                candidates = [
+                    (f"{base_url}/main/version/backup_app_v7_1.py", "backup_app_v7_1.py"), # Hardcoded Fallback im version Ordner
+                    (f"{base_url}/main/backup_app_v7_1.py", "backup_app_v7_1.py"),
+                    (f"{base_url}/master/backup_app_v7_1.py", "backup_app_v7_1.py")
+                ]
+            
             # SSL Context
             ctx = ssl.create_default_context()
             ctx.check_hostname = False
@@ -345,8 +395,12 @@ oLink.Save
             
             for url, filename in candidates:
                 try:
-                    self.root.after(0, lambda u=url: self.log(f"Versuche: {u}...", "info"))
-                    with urllib.request.urlopen(url, context=ctx) as response:
+                    self.root.after(0, lambda u=url: self.log(f"Downloade: {u}...", "info"))
+                    
+                    # Request mit User-Agent
+                    req = urllib.request.Request(url, headers={'User-Agent': 'BackupPro-Installer'})
+                    
+                    with urllib.request.urlopen(req, context=ctx) as response:
                         if response.getcode() == 200:
                             total_size = int(response.info().get('Content-Length', 0))
                             downloaded = 0
@@ -362,17 +416,21 @@ oLink.Save
                                     
                                     if total_size > 0:
                                         percent = (downloaded / total_size) * 100
-                                        self.root.after(0, lambda p=percent: self.progress.configure(value=p))
-                                        
+                                        # Nur UI Updates im Main Thread
+                                        # self.root.after(0, lambda p=percent: self.progress.configure(value=p))
+                            
                             success = True
                             downloaded_file = filename
                             break
                 except Exception as e:
                     last_error = e
+                    self.root.after(0, lambda err=e: self.log(f"Fehler bei {url}: {err}", "warn"))
             
             if success:
                 self.root.after(0, lambda: self.log(f"Download erfolgreich: {downloaded_file}", "success"))
                 self.root.after(0, lambda: messagebox.showinfo("Download", f"Die App ({downloaded_file}) wurde erfolgreich heruntergeladen!"))
+                # Aktualisiere app_script Variable falls sich der Name geändert hat
+                self.app_script = downloaded_file
             else:
                 self.root.after(0, lambda: self.log(f"Download fehlgeschlagen.", "error"))
                 self.root.after(0, lambda: messagebox.showerror("Fehler", f"Konnte keine gültige App-Datei finden.\nLetzter Fehler: {last_error}"))
