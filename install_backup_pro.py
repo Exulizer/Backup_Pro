@@ -259,6 +259,10 @@ if %errorlevel% neq 0 pause
         try:
             import winshell
             from win32com.client import Dispatch
+            import pythoncom
+            
+            # Initialisiere COM für diesen Thread
+            pythoncom.CoInitialize()
             
             desktop = winshell.desktop()
             path = os.path.join(desktop, f"{APP_NAME}.lnk")
