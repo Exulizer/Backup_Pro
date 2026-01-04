@@ -6,7 +6,21 @@ Es wurde entwickelt, um Projekte und wichtige Verzeichnisse nicht nur zu archivi
 
 ---
 
-## **✨ NEUE FEATURES (v7.1+)**
+## **✨ NEUE FEATURES (v7.2 Update)**
+
+### 🛑 **Smart Cancel & Safety**
+- **Abbruch-Button:** Laufende Backups können jetzt jederzeit sicher abgebrochen werden.
+- **Auto-Cleanup:** Bei Abbruch werden unvollständige ZIP-Dateien automatisch entfernt, um Speicherplatz zu sparen.
+- **Multi-File Support:** Wählen Sie jetzt mehrere einzelne Dateien aus verschiedenen Orten für ein gemeinsames Backup aus.
+
+### 📘 **Verbesserte Usability**
+- **Einsteiger-Handbuch:** Integrierte Schritt-für-Schritt-Anleitung direkt in der App.
+- **Klartext-Menü:** "Dashboard" heißt jetzt "ZENTRALE" für bessere Orientierung.
+- **Cloud-Optimierung:** Separates Feld für SFTP-Hostadressen behebt Verbindungsprobleme.
+
+---
+
+## **✨ FEATURES (v7.1)**
 
 ### 🔒 **Military-Grade Security**
 - **AES-256 Verschlüsselung:** Alle Backups können optional mit dem AES-256 Standard verschlüsselt werden.
@@ -76,12 +90,10 @@ Dank des intelligenten Launchers ist das Aktualisieren kinderleicht:
 ### **Cloud Backup einrichten**
 1. Unter **"Parameter"** -> **"Cloud Upload (SFTP)"**.
 2. Tragen Sie Host, Benutzer, Passwort und Zielpfad ein.
-3. *Tipp: Nutzen Sie das API-Key Feld als Host-Feld, falls kein separates Feld sichtbar ist (Legacy Mode).*
+3. *Neu in v7.2: Nutzen Sie das dedizierte "Server Host"-Feld für maximale Kompatibilität.*
 
 ---
 
 ## **📄 LIZENZ**
 
-### SOFTWARE-LIZENZVEREINBARUNG (PROPRIETÄR) ###
-
-### COPYRIGHT (C) 2026 EXULIZER. ALLE RECHTE VORBEHALTEN. ###
+**MIT-Lizenz** – Free for everyone.
