@@ -315,9 +315,9 @@ oLink.Save
             return False
 
     def get_latest_version_from_api(self):
-        """Fragt die GitHub API nach der neuesten Version im 'version' Ordner ab."""
-        # API URL für den Inhalt des 'version' Ordners
-        api_url = "https://api.github.com/repos/Exulizer/Backup_Pro/contents/version"
+        """Fragt die GitHub API nach der neuesten Version im 'versions' Ordner ab."""
+        # API URL für den Inhalt des 'versions' Ordners
+        api_url = "https://api.github.com/repos/Exulizer/Backup_Pro/contents/versions"
         
         try:
             self.log(f"Prüfe auf Updates via API: {api_url}", "info")
@@ -345,7 +345,7 @@ oLink.Save
                                 version_files.append((ver, item))
                     
                     if not version_files:
-                        self.log("Keine Versionen im 'version' Ordner gefunden.", "warn")
+                        self.log("Keine Versionen im 'versions' Ordner gefunden.", "warn")
                         return None
                         
                     # Sortiere absteigend (neueste zuerst)
@@ -383,7 +383,7 @@ oLink.Save
                 # Fallbacks falls API failt (alter Pfad oder Root)
                 base_url = "https://raw.githubusercontent.com/Exulizer/Backup_Pro"
                 candidates = [
-                    (f"{base_url}/main/version/backup_app_v7_1.py", "backup_app_v7_1.py"), # Hardcoded Fallback im version Ordner
+                    (f"{base_url}/main/versions/backup_app_v7_1.py", "backup_app_v7_1.py"), # Hardcoded Fallback im versions Ordner
                     (f"{base_url}/main/backup_app_v7_1.py", "backup_app_v7_1.py"),
                     (f"{base_url}/master/backup_app_v7_1.py", "backup_app_v7_1.py")
                 ]
