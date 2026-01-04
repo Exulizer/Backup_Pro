@@ -406,22 +406,15 @@ def run_backup_logic(source, dest, comment="Automatisches Backup"):
             try:
                 current_job_status.update({"step": "cloud", "message": "Lade in Cloud hoch (SFTP)...", "progress": 95})
                 
-                c_host = config.get("cloud_host", "") # Muss noch in Config GUI
+                c_host = config.get("cloud_host", "")
                 c_user = config.get("cloud_user", "")
                 c_pass = config.get("cloud_password", "")
                 c_path = config.get("cloud_target_path", "/backups")
                 
-                # Wir parsen host aus der Config, da wir aktuell kein Feld dafür haben
-                # Fallback: Versuche Host aus Pfad oder User zu erraten ist unsicher.
-                # Wir brauchen ein Host-Feld. Bis dahin: Log only
-                
-                # Wenn API Key Feld als Host missbraucht wird (Workaround)
-                c_host_workaround = config.get("cloud_api_key", "") 
-                
-                if c_host_workaround and c_user:
+                if c_host and c_user:
                     ssh = paramiko.SSHClient()
                     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                    ssh.connect(c_host_workaround, username=c_user, password=c_pass)
+                    ssh.connect(c_host, username=c_user, password=c_pass)
                     
                     sftp = ssh.open_sftp()
                     # Stelle sicher, dass Remote-Ordner existiert (einfacher Check)
@@ -436,7 +429,7 @@ def run_backup_logic(source, dest, comment="Automatisches Backup"):
                     ssh.close()
                     logger.info("SFTP Upload erfolgreich.")
                 else:
-                    logger.warning("Cloud Upload übersprungen: Host (in API-Key Feld) fehlt.")
+                    logger.warning("Cloud Upload übersprungen: Host oder User fehlt.")
                     
             except Exception as cloud_err:
                 logger.error(f"Cloud Upload fehlgeschlagen: {cloud_err}")
@@ -825,6 +818,10 @@ HTML_TEMPLATE = """
 
                 <div class="bg-black/20 p-5 rounded-xl border border-white/5 space-y-6">
                     <h3 class="text-[11px] font-black uppercase text-slate-400 border-b border-white/5 pb-2">Authentifizierung</h3>
+                    <div class="mb-4">
+                         <label class="text-[10px] font-black uppercase text-slate-500 mb-2 block tracking-widest">Server Host (nur SFTP)</label>
+                         <input type="text" id="config-cloud-host" placeholder="z.B. 192.168.1.100 oder sftp.example.com" class="w-full bg-[#08090d] border border-white/5 rounded p-2 text-xs text-blue-400 outline-none focus:border-blue-500 mono">
+                    </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                              <label class="text-[10px] font-black uppercase text-slate-500 mb-2 block tracking-widest">Benutzer / ID</label>
@@ -835,9 +832,9 @@ HTML_TEMPLATE = """
                              <input type="password" id="config-cloud-password" class="w-full bg-[#08090d] border border-white/5 rounded p-2 text-xs text-white outline-none focus:border-blue-500">
                         </div>
                     </div>
-                    <div>
-                         <label class="text-[10px] font-black uppercase text-slate-500 mb-2 block tracking-widest">Server Host (nur SFTP) / API-Key</label>
-                         <input type="text" id="config-cloud-api-key" placeholder="z.B. 192.168.1.100 oder sftp.example.com" class="w-full bg-[#08090d] border border-white/5 rounded p-2 text-xs text-blue-400 outline-none focus:border-blue-500 mono">
+                    <div class="mt-4">
+                         <label class="text-[10px] font-black uppercase text-slate-500 mb-2 block tracking-widest">API-Key (Optional)</label>
+                         <input type="text" id="config-cloud-api-key" placeholder="Optionaler API Key..." class="w-full bg-[#08090d] border border-white/5 rounded p-2 text-xs text-blue-400 outline-none focus:border-blue-500 mono">
                     </div>
                 </div>
 
@@ -932,52 +929,89 @@ HTML_TEMPLATE = """
         <section id="tab-help" class="tab-content flex-1 overflow-y-auto p-8 hidden text-slate-200">
             <div class="max-w-4xl mx-auto space-y-12 pb-20">
                 <header class="text-center space-y-4">
-                    <h1 class="text-3xl font-black text-white tracking-widest uppercase italic">Operational Handbook v7.1</h1>
+                    <h1 class="text-3xl font-black text-white tracking-widest uppercase italic">Benutzerhandbuch</h1>
                     <div class="h-1 w-20 bg-blue-500 mx-auto"></div>
-                    <p class="text-slate-500 max-w-lg mx-auto text-sm leading-relaxed">Der umfassende Leitfaden zur Master-Control des Commander Kernels.</p>
+                    <p class="text-slate-500 max-w-lg mx-auto text-sm leading-relaxed">Einfache Anleitung für Backup Pro.</p>
                 </header>
+
+                <div class="commander-module p-6 bg-emerald-500/5 border-emerald-500/20 mb-10">
+                    <h3 class="text-lg font-black text-emerald-400 mb-4 uppercase tracking-wider">00 Erste Schritte & Workflow</h3>
+                    <div class="space-y-4 text-sm text-slate-300 leading-relaxed">
+                        <p><strong class="text-white">Willkommen!</strong> Backup Pro ist so aufgebaut, dass Sie alles Wichtige sofort finden. Links im Menü sehen Sie die 5 Bereiche:</p>
+                        <ul class="list-disc pl-4 space-y-1 text-xs text-slate-400">
+                            <li><strong>01 ZENTRALE:</strong> Ihre Hauptübersicht. Hier starten Sie Backups und sehen, ob alles okay ist.</li>
+                            <li><strong>02 RESTORE:</strong> "Wiederherstellen". Hier holen Sie gelöschte Dateien zurück.</li>
+                            <li><strong>03 CLOUD:</strong> Wenn Sie Ihre Daten auch im Internet sichern wollen (optional).</li>
+                            <li><strong>04 ANALYSE:</strong> Hilft beim Aufräumen von doppelten Dateien.</li>
+                            <li><strong>05 PARAMETER:</strong> Die Einstellungen. Hier legen Sie fest, WAS und WOHIN gesichert wird.</li>
+                        </ul>
+                        
+                        <div class="mt-6">
+                            <h4 class="font-bold text-white mb-2">Ihr erstes Backup in 3 Minuten:</h4>
+                            <ol class="list-decimal pl-4 space-y-2 text-xs text-slate-400">
+                                <li>Klicken Sie links auf <strong>05 PARAMETER</strong>.</li>
+                                <li>Bei "Source Path" (Quelle): Wählen Sie den Ordner aus, den Sie sichern möchten (z.B. Ihre Dokumente).</li>
+                                <li>Bei "Target Path" (Ziel): Wählen Sie den Ort, wo die Sicherung hin soll (z.B. USB-Stick).</li>
+                                <li>Klicken Sie unten auf den großen Button "Parameter persistent speichern".</li>
+                                <li>Gehen Sie zurück zur <strong>01 ZENTRALE</strong>.</li>
+                                <li>Klicken Sie auf "Snapshot anlegen" (Blitz-Symbol). Das war's!</li>
+                            </ol>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-white/5">
+                            <div>
+                                <h4 class="font-bold text-white mb-2">Daten wiederherstellen (Restore)</h4>
+                                <p class="text-xs text-slate-400">Wenn eine Datei fehlt, gehen Sie zu <strong>02 RESTORE</strong>. Wählen Sie links das Datum aus, an dem die Datei noch da war. Klicken Sie dann auf "Restore". <br><span class="text-red-400">ACHTUNG:</span> Der gesamte Ordner wird auf diesen alten Stand zurückgesetzt. Neue Dateien, die Sie seitdem erstellt haben, könnten dabei verloren gehen!</p>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-white mb-2">Platz sparen mit Analyse</h4>
+                                <p class="text-xs text-slate-400">Unter <strong>04 ANALYSE</strong> sucht das Programm nach doppelten Dateien. Wenn Sie diese vor dem Backup löschen, geht das Backup schneller und braucht weniger Platz.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
                     <div class="handbook-item">
-                        <h3><span class="handbook-tag">01</span> Snapshot-Engine</h3>
-                        <p>Die Engine nutzt native <code>shutil</code> und <code>zipfile</code> Bibliotheken. Archive werden mit <code>ZIP_DEFLATED</code> (Level 6) komprimiert. Jede Datei erhält einen Salted-SHA256 Hash, der sich aus dem Inhalt und dem exakten Zeitstempel zusammensetzt, um Kollisionen auszuschließen.</p>
+                        <h3><span class="handbook-tag">01</span> Was ist ein Snapshot?</h3>
+                        <p>Ein "Snapshot" ist wie ein Foto Ihrer Daten zu einem bestimmten Zeitpunkt. Backup Pro packt alle Ihre Dateien in ein Päckchen (ZIP-Datei). So können Sie später genau diesen Zustand wiederherstellen.</p>
                     </div>
                     <div class="handbook-item">
-                        <h3><span class="handbook-tag">02</span> Retention & Garbage Collection</h3>
-                        <p>Die Retention-Policy überwacht das Zielverzeichnis. Bei Überschreitung des <code>retention_count</code> werden älteste Snapshots nach dem LIFO-Prinzip gelöscht. Das System prüft dabei die Datei-Präfixe, um versehentliches Löschen fremder Daten zu verhindern.</p>
+                        <h3><span class="handbook-tag">02</span> Aufräum-Regel (Retention)</h3>
+                        <p>Damit Ihre Festplatte nicht voll wird, löscht Backup Pro automatisch uralte Sicherungen. Unter "Parameter" -> "Retention Limit" stellen Sie ein, wie viele Backups Sie behalten wollen (z.B. die letzten 10). Das älteste wird dann automatisch gelöscht.</p>
                     </div>
                     <div class="handbook-item">
-                        <h3><span class="handbook-tag">03</span> Delta Monitoring</h3>
-                        <p>Das Delta-System berechnet die Differenz der Dateianzahl zwischen dem aktiven Quellverzeichnis und dem Register des letzten erfolgreichen Backups. Ein hohes Delta weist auf massive Änderungen hin, die einen manuellen Snapshot rechtfertigen.</p>
+                        <h3><span class="handbook-tag">03</span> Delta (Änderungen)</h3>
+                        <p>In der <strong>01 ZENTRALE</strong> sehen Sie "Change Delta". Das zeigt einfach an, wie viel sich seit dem letzten Backup verändert hat. Viele Änderungen = Zeit für ein neues Backup!</p>
                     </div>
                     <div class="handbook-item">
-                        <h3><span class="handbook-tag">04</span> Cloud Connect & Security</h3>
-                        <p>Cloud-Anmeldedaten werden lokal in der <code>backup_config.json</code> gespeichert. Wir empfehlen die Nutzung von API-Keys statt Passwörtern, wo immer möglich. Die Synchronisation startet asynchron unmittelbar nach der lokalen Archivierung.</p>
+                        <h3><span class="handbook-tag">04</span> Cloud & Server</h3>
+                        <p>Unter <strong>03 CLOUD</strong> können Sie eine zusätzliche Sicherung im Internet einrichten. Wichtig: Tragen Sie bei "Server Host" die Adresse Ihres Servers ein. Das Backup wird dann automatisch nach dem lokalen Backup hochgeladen.</p>
                     </div>
                     <div class="handbook-item">
-                        <h3><span class="handbook-tag">05</span> Fehlerbehebung (Troubleshooting)</h3>
-                        <p>Wenn ein Snapshot fehlschlägt, prüfen Sie das Terminal auf <code>PermissionError</code> (Datei durch System blockiert) oder <code>OSError</code> (Speicherplatz voll). Der Commander versucht blockierte Dateien bis zu 15 Mal neu zu lesen, bevor der Job abgebrochen wird.</p>
+                        <h3><span class="handbook-tag">05</span> Fehlerbehebung</h3>
+                        <p>Wenn ein Backup fehlschlägt, ist meistens eine Datei noch geöffnet (z.B. eine Excel-Tabelle). Schließen Sie alle Programme und versuchen Sie es nochmal. Prüfen Sie auch, ob der USB-Stick voll ist.</p>
                     </div>
                     <div class="handbook-item">
-                        <h3><span class="handbook-tag">06</span> Performance & Units</h3>
-                        <p>Die Unit-Engine im Header erlaubt den Wechsel zwischen MB und GB. Das System passt die Genauigkeit dynamisch an: Bei kleinen Werten im GB-Modus wird die Präzision automatisch auf zwei Nachkommastellen erhöht, um "0,0 GB" Anzeigen zu vermeiden.</p>
+                        <h3><span class="handbook-tag">06</span> MB und GB Anzeige</h3>
+                        <p>Oben rechts können Sie die Einheit umschalten. "GB" (Gigabyte) ist besser für große Datenmengen, "MB" (Megabyte) für kleinere. Das ändert nur die Anzeige, nicht die Daten.</p>
                     </div>
                     <div class="handbook-item">
-                        <h3><span class="handbook-tag">07</span> System Health Score</h3>
-                        <p>Der Health-Score ist ein interner Indikator <strong>exklusiv für Backup Pro</strong>. Er bewertet NICHT Ihren PC oder Ihre Hardware, sondern lediglich die "Gesundheit" Ihrer Backup-Strategie (Häufigkeit, Redundanz, Speicherplatz auf dem Ziellaufwerk). Ein niedriger Score bedeutet nur, dass Sie längere Zeit kein Backup gemacht haben.</p>
+                        <h3><span class="handbook-tag">07</span> System Health (Ampel)</h3>
+                        <p>Die "System Health" in der Zentrale ist wie eine Ampel. Grün ist super. Gelb heißt "naja". Rot heißt "Achtung!". Wenn sie rot ist, sollten Sie dringend ein Backup machen oder Speicherplatz freigeben.</p>
                     </div>
                 </div>
 
                 <div class="commander-module p-6 bg-blue-500/5 border-blue-500/20">
-                    <h4 class="text-xs font-black uppercase text-blue-400 mb-4">Kernel-Expert Tipps</h4>
+                    <h4 class="text-xs font-black uppercase text-blue-400 mb-4">Profi Tipps</h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-[11px] mono text-slate-400">
                         <ul class="space-y-2">
-                            <li><span class="text-blue-500">PRO TIP:</span> Nutzen Sie reguläre Ausdrücke in den Exclusions unter Parameter, um temporäre Build-Files auszuschließen.</li>
-                            <li><span class="text-blue-500">RESTORE:</span> Ein Restore stellt den Ordnerinhalt 1:1 wieder her. Sichern Sie aktuelle Änderungen, bevor Sie einen alten Stand laden.</li>
+                            <li><span class="text-blue-500">SICHERHEIT:</span> Machen Sie vor jedem Windows-Update oder großen Änderungen ein Backup. Sicher ist sicher.</li>
+                            <li><span class="text-blue-500">RESTORE:</span> Denken Sie daran: Ein Restore macht alles wie früher. Kopieren Sie wichtige neue Dateien vorher woanders hin!</li>
                         </ul>
                         <ul class="space-y-2">
-                            <li><span class="text-blue-500">HASH CHECK:</span> Ein gelbes Schild im Hash-Modal deutet auf eine abgelaufene Signatur hin (re-hash empfohlen).</li>
-                            <li><span class="text-blue-500">SCHEDULER:</span> Der Hintergrund-Thread benötigt ca. 1% CPU-Last. Bei Intervall 0 ist die Automatik deaktiviert.</li>
+                            <li><span class="text-blue-500">AUTOMATIK:</span> Sie können unter Parameter ein "Intervall" einstellen (z.B. 60 Minuten). Dann müssen Sie gar nichts mehr drücken.</li>
+                            <li><span class="text-blue-500">ICONS:</span> Ein gelbes Schild bedeutet "Datei geändert", ein rotes Kreuz "Datei gelöscht", ein grünes Plus "Datei neu".</li>
                         </ul>
                     </div>
                 </div>
@@ -1025,6 +1059,7 @@ HTML_TEMPLATE = """
             
             // Cloud Felder
             if(document.getElementById('config-cloud-provider')) document.getElementById('config-cloud-provider').value = conf.cloud_provider || "SFTP";
+            if(document.getElementById('config-cloud-host')) document.getElementById('config-cloud-host').value = conf.cloud_host || "";
             if(document.getElementById('config-cloud-path')) document.getElementById('config-cloud-path').value = conf.cloud_target_path || "";
             if(document.getElementById('config-cloud-user')) document.getElementById('config-cloud-user').value = conf.cloud_user || "";
             if(document.getElementById('config-cloud-password')) document.getElementById('config-cloud-password').value = conf.cloud_password || "";
@@ -1417,6 +1452,7 @@ HTML_TEMPLATE = """
                 auto_backup_enabled: autoBackupEnabled,
                 // Cloud Settings
                 cloud_provider: document.getElementById('config-cloud-provider').value,
+                cloud_host: document.getElementById('config-cloud-host').value,
                 cloud_target_path: document.getElementById('config-cloud-path').value,
                 cloud_user: document.getElementById('config-cloud-user').value,
                 cloud_password: document.getElementById('config-cloud-password').value,
