@@ -1312,10 +1312,16 @@ HTML_TEMPLATE = """
             document.getElementById('zipBar').style.width = "0%";
             
             try {
+                // Robustere Fehlerbehandlung für Fetch
                 const resp = await fetch('/api/start_backup', { 
                     method: 'POST', headers: {'Content-Type': 'application/json'}, 
                     body: JSON.stringify({source, dest, comment: document.getElementById('snap-comment').value}) 
                 });
+                
+                if (!resp.ok) {
+                    throw new Error(`HTTP Error: ${resp.status}`);
+                }
+
                 const data = await resp.json();
                 
                 if(data.status === 'error') {
@@ -1328,6 +1334,8 @@ HTML_TEMPLATE = """
                 const pollTimer = setInterval(async () => {
                     try {
                         const sResp = await fetch('/api/get_backup_status');
+                        if (!sResp.ok) return; // Silent fail on poll error to prevent log spam
+                        
                         const sData = await sResp.json();
                         
                         document.getElementById('zipBar').style.width = sData.progress + "%";
@@ -1351,7 +1359,8 @@ HTML_TEMPLATE = """
                 }, 1000);
 
             } catch(e) {
-                addLog("Netzwerk Fehler: " + e, "error");
+                console.error(e);
+                addLog("Netzwerk Fehler: " + e.message, "error");
                 document.getElementById('zipProgressArea').classList.add('hidden');
             }
         }
@@ -1495,8 +1504,12 @@ def get_history_api():
     
     if dest and not reindexing_active:
         threading.Thread(target=run_async_reindex, args=(dest,), daemon=True).start()
-        
-    return jsonify(load_history())
+    
+    # Sicherstellen, dass wir eine Liste zurückgeben
+    history = load_history()
+    if history is None:
+        history = []
+    return jsonify(history)
 
 @app.route("/api/get_disk_stats", methods=["POST"])
 def get_disk_stats():
