@@ -962,6 +962,10 @@ HTML_TEMPLATE = """
                         <h3><span class="handbook-tag">06</span> Performance & Units</h3>
                         <p>Die Unit-Engine im Header erlaubt den Wechsel zwischen MB und GB. Das System passt die Genauigkeit dynamisch an: Bei kleinen Werten im GB-Modus wird die Präzision automatisch auf zwei Nachkommastellen erhöht, um "0,0 GB" Anzeigen zu vermeiden.</p>
                     </div>
+                    <div class="handbook-item">
+                        <h3><span class="handbook-tag">07</span> System Health Score</h3>
+                        <p>Der Health-Score ist ein interner Indikator <strong>exklusiv für Backup Pro</strong>. Er bewertet NICHT Ihren PC oder Ihre Hardware, sondern lediglich die "Gesundheit" Ihrer Backup-Strategie (Häufigkeit, Redundanz, Speicherplatz auf dem Ziellaufwerk). Ein niedriger Score bedeutet nur, dass Sie längere Zeit kein Backup gemacht haben.</p>
+                    </div>
                 </div>
 
                 <div class="commander-module p-6 bg-blue-500/5 border-blue-500/20">
