@@ -18,7 +18,7 @@ from datetime import datetime
 from collections import defaultdict
 from flask import Flask, render_template_string, jsonify, request
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 
 # --- Konfiguration & Logging ---
 
