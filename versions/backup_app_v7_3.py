@@ -1199,13 +1199,19 @@ HTML_TEMPLATE = """
          * Erhöht die Präzision im GB Modus für kleine Werte, um "0,0 GB" zu vermeiden.
          */
         function formatSize(bytes) {
-            if (!bytes || bytes === 0) return "0,0 " + globalUnit;
+            if (!bytes || bytes === 0) return "0,00 " + globalUnit;
             const isGB = globalUnit === 'GB';
             const divisor = isGB ? (1024**3) : (1024**2);
             let val = bytes / divisor;
             
-            // Dynamische Präzision: Wenn GB gewählt ist und der Wert klein ist (< 0.1), zeigen wir 2 Stellen.
-            const precision = (isGB && val < 0.1 && val > 0) ? 2 : 1;
+            // User Request: MB mit 2 Nachkommastellen
+            let precision = 1;
+            if (!isGB) {
+                precision = 2;
+            } else {
+                // GB: Dynamisch (2 bei sehr kleinen Werten, sonst 1)
+                precision = (val < 0.1 && val > 0) ? 2 : 1;
+            }
             return val.toFixed(precision).replace('.', ',') + " " + globalUnit;
         }
 
