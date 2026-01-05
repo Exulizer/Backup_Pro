@@ -96,4 +96,4 @@ Dank des intelligenten Launchers ist das Aktualisieren kinderleicht:
 
 ## **📄 LIZENZ**
 
-**MIT-Lizenz** – Free for everyone.
+** © 2025 Copyright Exulizer**
