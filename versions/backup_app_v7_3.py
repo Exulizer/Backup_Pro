@@ -5,20 +5,20 @@ import webbrowser
 import json
 import time
 import zipfile
-import pyzipper
+# import pyzipper -> Lazy Loaded
 import fnmatch
 import subprocess
 import threading
 import logging
 import errno
-import paramiko
+# import paramiko -> Lazy Loaded
 import socket
 import sys
 from datetime import datetime
 from collections import defaultdict
 from flask import Flask, render_template_string, jsonify, request
-import tkinter as tk
-from tkinter import filedialog, messagebox
+# import tkinter as tk -> Lazy Loaded
+# from tkinter import filedialog, messagebox -> Lazy Loaded
 
 # --- Konfiguration & Logging ---
 
@@ -395,6 +395,7 @@ def run_backup_logic(source, dest, comment="Automatisches Backup"):
         
         # Verwende ZIP_DEFLATED für Kompression, optional AES-Verschlüsselung
         if enc_enabled and enc_pw:
+            import pyzipper # Lazy Load
             logger.info("Verschlüsselung (AES) aktiviert.")
             # pyzipper verwenden für AES
             zip_ctx = pyzipper.AESZipFile(zip_path, 'w', compression=pyzipper.ZIP_DEFLATED, encryption=pyzipper.WZ_AES)
@@ -480,6 +481,7 @@ def run_backup_logic(source, dest, comment="Automatisches Backup"):
                 c_path = config.get("cloud_target_path", "/backups")
                 
                 if c_host and c_user:
+                    import paramiko # Lazy Load
                     ssh = paramiko.SSHClient()
                     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                     ssh.connect(c_host, username=c_user, password=c_pass)
@@ -641,9 +643,84 @@ HTML_TEMPLATE = """
         .unit-btn { padding: 4px 10px; font-size: 10px; font-weight: 900; border-radius: 4px; cursor: pointer; transition: all 0.2s; color: #64748b; }
         .unit-btn.active { background: var(--accent); color: white; box-shadow: 0 0 10px rgba(0, 132, 255, 0.3); }
         .unit-btn:not(.active):hover { background: rgba(255,255,255,0.05); color: #c0c8d6; }
+
+        /* --- Klipper-Style Loader --- */
+        #startup-loader {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #050505;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s ease-out;
+        }
+        .loader-content {
+            width: 300px;
+            text-align: center;
+        }
+        .loader-logo {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            animation: pulse-glow 2s infinite;
+        }
+        .loader-bar-bg {
+            width: 100%;
+            height: 4px;
+            background: #1f2430;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 1rem;
+            position: relative;
+        }
+        .loader-bar-fill {
+            height: 100%;
+            background: #0084ff;
+            width: 0%;
+            animation: load-progress 2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            box-shadow: 0 0 10px #0084ff;
+        }
+        .loader-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: #0084ff;
+            margin-top: 0.5rem;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+        }
+        @keyframes pulse-glow {
+            0% { text-shadow: 0 0 10px rgba(0,132,255,0.2); opacity: 0.8; }
+            50% { text-shadow: 0 0 25px rgba(0,132,255,0.6); opacity: 1; }
+            100% { text-shadow: 0 0 10px rgba(0,132,255,0.2); opacity: 0.8; }
+        }
+        @keyframes load-progress {
+            0% { width: 0%; }
+            30% { width: 40%; }
+            70% { width: 80%; }
+            100% { width: 100%; }
+        }
     </style>
 </head>
 <body class="flex h-screen overflow-hidden text-slate-300">
+
+    <!-- Startup Loader -->
+    <div id="startup-loader">
+        <div class="loader-content">
+            <div class="loader-logo">🛡️</div>
+            <div class="text-xl font-black text-white tracking-[0.3em] uppercase mb-1">BACKUP<span class="text-blue-500">OS</span></div>
+            <div class="text-[9px] text-slate-500 uppercase tracking-widest mb-6">Hybrid Kernel v7.3</div>
+            
+            <div class="loader-bar-bg">
+                <div class="loader-bar-fill"></div>
+            </div>
+            <div class="flex justify-between items-center mt-2 w-64">
+                 <div class="loader-text" id="loader-msg">INITIALIZING...</div>
+                 <div class="loader-text text-blue-500" id="loader-percent">0%</div>
+            </div>
+            <div id="loader-console" class="text-[9px] font-mono text-slate-600 mt-2 h-4 overflow-hidden text-center uppercase tracking-wider"></div>
+        </div>
+    </div>
 
     <!-- Detail Modal -->
     <div id="hash-modal" class="fixed inset-0 z-[999] items-center justify-center p-4">
@@ -1125,6 +1202,34 @@ HTML_TEMPLATE = """
     </main>
 
     <script>
+        // Boot Sequence Simulation
+        (function() {
+            const msgs = [
+                "LOADING KERNEL MODULES...",
+                "MOUNTING VIRTUAL FILESYSTEM...",
+                "CHECKING INTEGRITY...",
+                "LOADING CONFIGURATION...",
+                "ESTABLISHING SECURE LINK...",
+                "STARTING DAEMON PROCESSES...",
+                "SYSTEM READY."
+            ];
+            let i = 0;
+            const interval = setInterval(() => {
+                const consoleEl = document.getElementById('loader-console');
+                const percentEl = document.getElementById('loader-percent');
+                
+                if(i >= msgs.length) {
+                    clearInterval(interval);
+                    if(consoleEl) consoleEl.innerText = "> WAITING FOR BACKEND...";
+                    return;
+                }
+                
+                if(consoleEl) consoleEl.innerText = "> " + msgs[i];
+                if(percentEl) percentEl.innerText = Math.round(((i + 1) / msgs.length) * 100) + "%";
+                i++;
+            }, 200);
+        })();
+
         let storageChart = null;
         let globalHistory = [];
         let currentDiskUsedPercent = 0;
@@ -1347,6 +1452,16 @@ HTML_TEMPLATE = """
                 const hResp = await fetch('/api/get_history');
                 globalHistory = await hResp.json();
                 updateDashboardDisplays();
+
+                // Ladeanimation ausblenden
+                const loader = document.getElementById('startup-loader');
+                if(loader) {
+                    setTimeout(() => {
+                        loader.style.opacity = '0';
+                        setTimeout(() => { loader.style.display = 'none'; }, 500);
+                    }, 1500); // Mindestens 1.5 Sekunden anzeigen für Effekt
+                }
+
             } catch(e) { console.error("Load Error:", e); }
         }
 
@@ -1718,6 +1833,8 @@ def save_config_api():
 def pick_files():
     """Öffnet den Multi-Datei-Dialog (Windows native)."""
     try:
+        import tkinter as tk # Lazy Load
+        from tkinter import filedialog # Lazy Load
         root = tk.Tk()
         root.withdraw()
         root.attributes('-topmost', True)
@@ -1736,6 +1853,8 @@ def pick_files():
 def pick_file():
     """Öffnet den Datei-Dialog (Windows native)."""
     try:
+        import tkinter as tk # Lazy Load
+        from tkinter import filedialog # Lazy Load
         root = tk.Tk()
         root.withdraw()
         root.attributes('-topmost', True)
@@ -1750,6 +1869,8 @@ def pick_file():
 def pick_folder():
     """Öffnet den Ordner-Dialog (Windows native)."""
     try:
+        import tkinter as tk # Lazy Load
+        from tkinter import filedialog # Lazy Load
         root = tk.Tk()
         root.withdraw()
         root.attributes('-topmost', True)
@@ -1922,6 +2043,8 @@ if __name__ == "__main__":
             
         # User fragen
         try:
+            import tkinter as tk # Lazy Load
+            from tkinter import messagebox # Lazy Load
             root = tk.Tk()
             root.withdraw() # Hauptfenster verstecken
             root.attributes("-topmost", True) # In den Vordergrund
