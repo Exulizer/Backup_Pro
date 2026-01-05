@@ -151,19 +151,33 @@ def is_excluded(item_name, exclusions):
 def apply_retention(dest_path, limit):
     """
     Entfernt alte Backups basierend auf dem Namen (enthält Zeitstempel).
-    Nutzt lexikographische Sortierung, da Zeitstempel im Format YYYY-MM-DD sind.
+    Respektiert 'locked' Status aus der Historie.
     """
     try:
         if not os.path.exists(dest_path):
             return []
+            
+        # Lade Historie um Locked-Status zu prüfen
+        history = load_history()
+        locked_filenames = {h['filename'] for h in history if h.get('locked', False)}
+        
         # Nur ZIP Dateien erfassen, die dem Backup-Schema entsprechen
         backups = [f for f in os.listdir(dest_path) if f.startswith("backup_") and f.endswith(".zip")]
         # Sortierung nach Name ist bei diesem Zeitstempelformat chronologisch korrekt
         backups.sort()
         
+        # Filtere gelockte Backups aus der Lösch-Liste heraus (sie zählen nicht gegen das Limit oder werden übersprungen)
+        # Strategie: Wir zählen nur nicht-gelockte Backups gegen das Limit.
+        # D.h. wenn Limit=10 und ich habe 5 Locked + 8 Normal = 13 Total.
+        # Ich lösche so lange die ältesten Normalen, bis ich <= 10 Normale habe?
+        # Oder Strict Count: Total <= 10, aber Locked darf nicht gelöscht werden?
+        # User-Friendly: Locked zählt NICHT ins Limit (Bonus-Storage).
+        
+        deletable_backups = [b for b in backups if b not in locked_filenames]
+        
         deleted = []
-        while len(backups) > limit:
-            oldest_filename = backups.pop(0)
+        while len(deletable_backups) > limit:
+            oldest_filename = deletable_backups.pop(0)
             full_path = os.path.join(dest_path, oldest_filename)
             if os.path.exists(full_path):
                 try:
@@ -700,6 +714,36 @@ HTML_TEMPLATE = """
             70% { width: 80%; }
             100% { width: 100%; }
         }
+        
+        /* Modal Tabs */
+        .modal-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px; }
+        .modal-tab { 
+            padding: 10px 20px; 
+            font-size: 11px; 
+            font-weight: 900; 
+            text-transform: uppercase; 
+            letter-spacing: 0.1em; 
+            color: #64748b; 
+            cursor: pointer; 
+            border-bottom: 2px solid transparent; 
+            transition: all 0.2s;
+        }
+        .modal-tab:hover { color: #94a3b8; }
+        .modal-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+        
+        .file-list { max-height: 300px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
+        .file-list-item { 
+            padding: 6px 12px; 
+            border-bottom: 1px solid rgba(255,255,255,0.05); 
+            font-family: 'JetBrains Mono', monospace; 
+            font-size: 10px; 
+            color: #cbd5e1; 
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .file-list-item:last-child { border-bottom: none; }
+        .file-icon { color: #3b82f6; font-size: 10px; }
     </style>
 </head>
 <body class="flex h-screen overflow-hidden text-slate-300">
@@ -723,14 +767,27 @@ HTML_TEMPLATE = """
     </div>
 
     <!-- Detail Modal -->
-    <div id="hash-modal" class="fixed inset-0 z-[999] items-center justify-center p-4">
-        <div class="modal-content bg-[#11141d] border border-[#0084ff55] w-full max-w-2xl rounded-2xl p-8 relative shadow-2xl text-slate-200">
-            <button onclick="closeHashModal()" class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">✕</button>
-            <div class="flex items-center gap-3 mb-6">
+    <div id="hash-modal" class="fixed inset-0 z-[999] items-center justify-center p-4 hidden">
+        <div class="modal-content bg-[#11141d] border border-[#0084ff55] w-full max-w-4xl rounded-2xl p-8 relative shadow-2xl text-slate-200 flex flex-col max-h-[90vh]">
+            <button onclick="closeHashModal()" class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors z-10">✕</button>
+            
+            <div class="flex items-center gap-3 mb-2">
                 <div class="p-2 bg-blue-500/20 rounded text-blue-400">🛡️</div>
-                <h3 class="text-lg font-black uppercase tracking-widest text-white">Snapshot Integrität</h3>
+                <h3 class="text-lg font-black uppercase tracking-widest text-white">Snapshot Inspektor</h3>
+                <div id="lock-badge" class="hidden bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
+                    <span>🔒</span> RETENTION LOCK
+                </div>
             </div>
-            <div class="space-y-6">
+
+            <!-- Integrity Result (Prominent) -->
+            <div id="integrity-result" class="mb-4 hidden p-3 rounded-lg text-center font-bold text-xs tracking-wide border"></div>
+
+            <div class="modal-tabs">
+                <div class="modal-tab active" onclick="switchModalTab('meta')">Metadaten</div>
+                <div class="modal-tab" onclick="switchModalTab('content')">Inhalt (Dateien)</div>
+            </div>
+
+            <div id="tab-meta" class="modal-tab-content space-y-6 overflow-y-auto pr-2">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label class="text-[11px] text-slate-500 uppercase font-black mb-2 block tracking-widest">Dateiname</label>
@@ -738,24 +795,58 @@ HTML_TEMPLATE = """
                     </div>
                     <div>
                         <label class="text-[11px] text-slate-500 uppercase font-black mb-2 block tracking-widest">Status</label>
-                        <div class="bg-green-500/10 p-3 rounded border border-green-500/20 text-xs font-bold text-green-500 uppercase flex items-center gap-2">
-                             <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span> Verifiziert
+                        <div class="flex gap-2">
+                            <div class="bg-green-500/10 p-3 rounded border border-green-500/20 text-xs font-bold text-green-500 uppercase flex items-center gap-2 flex-1">
+                                <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span> Verifiziert
+                            </div>
+                            <button id="btn-lock" onclick="toggleLock()" class="bg-amber-500/10 p-3 rounded border border-amber-500/20 text-amber-500 hover:bg-amber-500/20 transition-colors" title="Retention Lock umschalten">
+                                🔓
+                            </button>
                         </div>
                     </div>
                 </div>
+                
+                <div>
+                    <label class="text-[11px] text-slate-500 uppercase font-black mb-2 block tracking-widest">Kommentar</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="modal-comment" class="flex-1 bg-black/40 border border-white/5 rounded p-3 text-xs text-white outline-none focus:border-blue-500 transition-colors" placeholder="Kein Kommentar...">
+                        <button onclick="saveComment()" class="px-4 bg-blue-600/20 border border-blue-600/40 text-blue-400 rounded hover:bg-blue-600/30 transition-colors text-[10px] font-black uppercase tracking-widest">Save</button>
+                    </div>
+                </div>
+
                 <div>
                     <label class="text-[11px] text-slate-500 uppercase font-black mb-2 block tracking-widest">SHA256 Signatur</label>
                     <div id="modal-hash" class="bg-black/40 p-4 rounded border border-white/5 text-[11px] mono text-white break-all leading-relaxed shadow-inner"></div>
                 </div>
+                
                 <div class="grid grid-cols-2 gap-6 bg-black/20 p-4 rounded-xl">
                     <div><label class="text-[11px] text-slate-500 uppercase font-black block mb-1">Zeitpunkt</label><div id="modal-ts" class="text-sm font-bold text-white"></div></div>
                     <div><label class="text-[11px] text-slate-500 uppercase font-black block mb-1">Größe</label><div id="modal-size" class="text-sm font-bold text-white"></div></div>
                 </div>
+
+                <div class="border-t border-white/5 pt-6">
+                    <label class="text-[11px] text-slate-500 uppercase font-black mb-4 block tracking-widest">Erweiterte Aktionen</label>
+                    <div class="flex gap-4">
+                        <button onclick="verifyIntegrity()" id="btn-integrity" class="flex-1 bg-emerald-900/10 py-3 rounded text-[11px] font-black uppercase tracking-widest hover:bg-emerald-900/20 transition-all text-emerald-500 border border-emerald-500/20 flex items-center justify-center gap-2">
+                            <span>⚡</span> Integrität Prüfen (Deep Scan)
+                        </button>
+                        <button id="modal-delete-btn" class="flex-1 bg-red-900/10 py-3 rounded text-[11px] font-black uppercase tracking-widest hover:bg-red-900/20 transition-all text-red-500 border border-red-500/20 flex items-center justify-center gap-2">
+                            <span>✕</span> Snapshot Löschen
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div class="flex gap-4 mt-8">
-                <button onclick="copyHash()" class="flex-1 bg-[#1a1e2a] py-3 rounded text-[11px] font-black uppercase tracking-widest hover:bg-slate-700 transition-all text-white border border-white/5">Signatur kopieren</button>
-                <button id="modal-delete-btn" class="flex-1 bg-red-900/20 py-3 rounded text-[11px] font-black uppercase tracking-widest hover:bg-red-900/40 transition-all text-red-500 border border-red-500/20">Löschen</button>
+
+            <div id="tab-content" class="modal-tab-content hidden flex-1 flex flex-col min-h-0">
+                <div class="flex justify-between items-center mb-4">
+                    <span class="text-[11px] text-slate-500 uppercase font-black tracking-widest">Enthaltene Dateien</span>
+                    <span id="file-count-badge" class="text-[10px] bg-white/10 px-2 py-1 rounded text-white font-mono">-- Files</span>
+                </div>
+                <div id="zip-file-list" class="file-list flex-1">
+                    <div class="p-8 text-center text-slate-500 text-xs uppercase tracking-widest animate-pulse">Lade Dateistruktur...</div>
+                </div>
             </div>
+
         </div>
     </div>
 
@@ -817,7 +908,7 @@ HTML_TEMPLATE = """
         <header class="h-14 bg-[#0d0f16] border-b border-[#1a1e2a] flex items-center justify-between px-8">
             <div class="flex items-center gap-4">
                 <span class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]"></span>
-                <span class="text-[12px] font-black uppercase tracking-widest text-white">v7.2 Hybrid Kernel | Creator: Exulizer</span>
+                <span class="text-[12px] font-black uppercase tracking-widest text-white">v7.3 Hybrid Kernel | Creator: Exulizer</span>
             </div>
             <div class="flex items-center gap-6">
                 <div class="flex items-center gap-4 mr-4">
@@ -943,7 +1034,7 @@ HTML_TEMPLATE = """
                 <h2 class="text-[12px] text-slate-500 uppercase font-bold mb-6 tracking-widest">Snapshot Historie</h2>
                 <div class="overflow-x-auto">
                     <table class="min-w-full text-left text-sm">
-                        <thead><tr class="text-slate-500 uppercase text-[10px] font-black"><th class="px-4 py-3">Datum</th><th class="px-4 py-3">Datei</th><th class="px-4 py-3 text-right" id="history-size-header">Größe (MB)</th></tr></thead>
+                        <thead><tr class="text-slate-500 uppercase text-[10px] font-black"><th class="px-4 py-3">Datum</th><th class="px-4 py-3">Datei</th><th class="px-4 py-3 text-right" id="history-size-header">Größe</th></tr></thead>
                         <tbody id="history-table-body"></tbody>
                     </table>
                 </div>
@@ -1181,6 +1272,14 @@ HTML_TEMPLATE = """
                         <h3 class="text-lg font-bold text-white mb-3 group-hover:text-blue-400 transition-colors"><span class="text-blue-500/50 mr-2">06</span> System Health (Ampel)</h3>
                         <p class="text-sm text-slate-400 leading-relaxed">Die "System Health" in der Zentrale ist wie eine Ampel. Grün ist super. Gelb heißt "naja". Rot heißt "Achtung!". Wenn sie rot ist, sollten Sie dringend ein Backup machen oder Speicherplatz freigeben.</p>
                     </div>
+                    <div class="handbook-item p-6 bg-[#0f111a] rounded-xl border border-white/5 hover:border-blue-500/30 transition-all group">
+                        <h3 class="text-lg font-bold text-white mb-3 group-hover:text-blue-400 transition-colors"><span class="text-blue-500/50 mr-2">07</span> Snapshot Inspektor & Lock</h3>
+                        <p class="text-sm text-slate-400 leading-relaxed">Klicken Sie in der Liste auf ein Backup, um Details zu sehen. <strong class="text-emerald-400">Neu:</strong> Im Tab "Inhalt" sehen Sie alle Dateien im ZIP, ohne Restore! Mit dem <strong class="text-amber-500">Schloss-Symbol (Lock)</strong> können Sie wichtige Backups sperren – sie werden dann nie automatisch gelöscht, auch wenn das Limit erreicht ist.</p>
+                    </div>
+                    <div class="handbook-item p-6 bg-[#0f111a] rounded-xl border border-white/5 hover:border-blue-500/30 transition-all group">
+                        <h3 class="text-lg font-bold text-white mb-3 group-hover:text-blue-400 transition-colors"><span class="text-blue-500/50 mr-2">08</span> Deep Scan (Integrität)</h3>
+                        <p class="text-sm text-slate-400 leading-relaxed">Im Inspektor finden Sie den Button <strong class="text-emerald-400">INTEGRITÄT PRÜFEN</strong>. Das ist ein Gesundheitscheck: Das Programm berechnet den digitalen Fingerabdruck (Hash) neu und vergleicht ihn. So erkennen Sie sofort, ob Dateien auf der Festplatte beschädigt wurden (Bit Rot).</p>
+                    </div>
                 </div>
 
                 <!-- Profi Tipps -->
@@ -1295,23 +1394,43 @@ HTML_TEMPLATE = """
             document.querySelectorAll('.unit-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById('unit-' + unit.toLowerCase()).classList.add('active');
             const header = document.getElementById('history-size-header');
-            if(header) header.innerText = `Größe (${unit})`;
+            if(header) header.innerText = `Größe`; // Einheit wird jetzt pro Zeile angezeigt
             updateDashboardDisplays();
         }
 
         /**
-         * Formatiert Byte-Werte basierend auf der gewählten Einheit.
-         * Erhöht die Präzision im GB Modus für kleine Werte, um "0,0 GB" zu vermeiden.
+         * Formatiert Byte-Werte intelligent.
+         * Beachtet die globale Einheit (GB/MB), schaltet aber bei kleinen Werten automatisch runter,
+         * um "0,00 GB" zu vermeiden (z.B. 500 KB statt 0,00 GB).
          */
         function formatSize(bytes) {
-            if (!bytes || bytes === 0) return "0,0 " + globalUnit;
-            const isGB = globalUnit === 'GB';
-            const divisor = isGB ? (1024**3) : (1024**2);
-            let val = bytes / divisor;
+            if (!bytes || bytes === 0) return "0,00 " + globalUnit;
             
-            // Dynamische Präzision: Wenn GB gewählt ist und der Wert klein ist (< 0.1), zeigen wir 2 Stellen.
-            const precision = (isGB && val < 0.1 && val > 0) ? 2 : 1;
-            return val.toFixed(precision).replace('.', ',') + " " + globalUnit;
+            const G = 1024**3;
+            const M = 1024**2;
+            const K = 1024;
+            
+            // Wenn GB als Basis gewählt ist
+            if (globalUnit === 'GB') {
+                // Unter 10 MB -> Anzeige in MB oder KB
+                if (bytes < 0.01 * G) { 
+                    if (bytes < 0.1 * M) { // Unter 100 KB -> Anzeige in KB
+                        return (bytes / K).toFixed(1).replace('.', ',') + " KB";
+                    }
+                    return (bytes / M).toFixed(2).replace('.', ',') + " MB";
+                }
+                return (bytes / G).toFixed(2).replace('.', ',') + " GB";
+            }
+            
+            // Wenn MB als Basis gewählt ist
+            if (globalUnit === 'MB') {
+                 if (bytes < 0.1 * M) { // Unter 100 KB -> Anzeige in KB
+                    return (bytes / K).toFixed(1).replace('.', ',') + " KB";
+                }
+                return (bytes / M).toFixed(2).replace('.', ',') + " MB";
+            }
+            
+            return (bytes / M).toFixed(2).replace('.', ',') + " MB"; // Fallback
         }
 
         function switchTab(tabId) {
@@ -1365,16 +1484,50 @@ HTML_TEMPLATE = """
         function initChart() {
             const ctx = document.getElementById('storageChart').getContext('2d');
             storageChart = new Chart(ctx, {
-                type: 'line',
-                data: { labels: [], datasets: [{ 
-                    label: 'Snapshot Size', data: [], borderColor: '#0084ff', backgroundColor: 'rgba(0, 132, 255, 0.05)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 4, pointBackgroundColor: '#0084ff'
-                }]},
+                type: 'bar',
+                data: { 
+                    labels: [], 
+                    datasets: [{ 
+                        label: 'Snapshot Size', 
+                        data: [], 
+                        backgroundColor: [], 
+                        borderColor: [], 
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        barPercentage: 0.9,
+                        categoryPercentage: 0.8
+                    }]
+                },
                 options: { 
-                    responsive: true, maintainAspectRatio: false, 
-                    plugins: { legend: { display: false } }, 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(17, 20, 29, 0.9)',
+                            titleColor: '#94a3b8',
+                            bodyColor: '#fff',
+                            bodyFont: { family: 'JetBrains Mono' },
+                            callbacks: {
+                                label: function(context) {
+                                    return "Größe: " + context.parsed.y + " " + globalUnit;
+                                }
+                            }
+                        }
+                    }, 
                     scales: { 
-                        x: { grid: { display: false }, ticks: { color: '#666', font: { size: 9 } } }, 
-                        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#475569', font: { size: 9 } } } 
+                        x: { 
+                            grid: { display: false }, 
+                            ticks: { color: '#64748b', font: { size: 9, family: 'JetBrains Mono' }, maxRotation: 45, minRotation: 45 } 
+                        }, 
+                        y: { 
+                            grid: { color: 'rgba(255,255,255,0.05)' }, 
+                            ticks: { color: '#475569', font: { size: 9 }, callback: function(value) { return value + ' ' + globalUnit; } } 
+                        } 
                     } 
                 }
             });
@@ -1453,13 +1606,35 @@ HTML_TEMPLATE = """
                 globalHistory = await hResp.json();
                 updateDashboardDisplays();
 
-                // Ladeanimation ausblenden
+                // Ladeanimation ausblenden - mit simuliertem Progress für "Lazy Load" Effekt
                 const loader = document.getElementById('startup-loader');
                 if(loader) {
-                    setTimeout(() => {
-                        loader.style.opacity = '0';
-                        setTimeout(() => { loader.style.display = 'none'; }, 500);
-                    }, 1500); // Mindestens 1.5 Sekunden anzeigen für Effekt
+                    const consoleEl = document.getElementById('loader-console');
+                    const percentEl = document.getElementById('loader-percent');
+                    const barFill = document.querySelector('.loader-bar-fill');
+                    
+                    const steps = [
+                        { p: 30, msg: "LOADING KERNEL MODULES..." },
+                        { p: 55, msg: "CONNECTING TO UI ENGINE..." },
+                        { p: 75, msg: "VERIFYING INTEGRITY..." },
+                        { p: 90, msg: "STARTING SERVICES..." },
+                        { p: 100, msg: "READY." }
+                    ];
+
+                    let stepIdx = 0;
+                    const stepInterval = setInterval(() => {
+                        if(stepIdx >= steps.length) {
+                            clearInterval(stepInterval);
+                            loader.style.opacity = '0';
+                            setTimeout(() => { loader.style.display = 'none'; }, 500);
+                            return;
+                        }
+                        const s = steps[stepIdx];
+                        if(consoleEl) consoleEl.innerText = s.msg;
+                        if(percentEl) percentEl.innerText = s.p + "%";
+                        if(barFill) barFill.style.width = s.p + "%";
+                        stepIdx++;
+                    }, 300); // Alle 300ms ein Schritt
                 }
 
             } catch(e) { console.error("Load Error:", e); }
@@ -1474,24 +1649,47 @@ HTML_TEMPLATE = """
             let totalBytes = 0;
             storageChart.data.labels = [];
             storageChart.data.datasets[0].data = [];
+            storageChart.data.datasets[0].backgroundColor = [];
+            storageChart.data.datasets[0].borderColor = [];
 
-            [...globalHistory].reverse().forEach((entry) => {
+            [...globalHistory].reverse().forEach((entry, idx) => {
                 totalBytes += entry.size;
-                const formatted = formatSize(entry.size);
-                const displayValNumeric = formatted.split(' ')[0].replace(',', '.');
+                const formatted = formatSize(entry.size); // Smart String (z.B. "500 KB" oder "2,5 GB")
                 const originalIdx = globalHistory.indexOf(entry);
+
+                // Chart Value STRICT in globalUnit calc
+                const isGB = globalUnit === 'GB';
+                const chartDivisor = isGB ? (1024**3) : (1024**2);
+                const chartVal = entry.size / chartDivisor;
+
+                // Zufällige Farbe für jeden Eintrag (Hue-basiert für korrekte Transparenz)
+                const hue = Math.floor(Math.random() * 360);
+                const color = `hsl(${hue}, 70%, 60%)`;
+                const colorTransparent = `hsla(${hue}, 70%, 60%, 0.2)`;
+                
+                const lockIcon = entry.locked ? '<span title="Locked" class="ml-2 text-[10px]">🔒</span>' : '';
 
                 table.insertAdjacentHTML('beforeend', `<tr onclick="showDetails(${originalIdx})" class="bg-white/5 border-b border-white/5 cursor-pointer hover:bg-white/10 transition-all">
                     <td class="px-4 py-3 mono text-[10px] text-slate-400">${entry.timestamp}</td>
-                    <td class="px-4 py-3 font-bold text-blue-400 text-xs">${entry.filename}</td>
-                    <td class="px-4 py-3 text-right mono text-white text-xs">${formatted.split(' ')[0]}</td>
+                    <td class="px-4 py-3 font-bold text-xs" style="color: ${color}">${entry.filename}${lockIcon}</td>
+                    <td class="px-4 py-3 text-right mono text-white text-xs">${formatted}</td>
                 </tr>`);
                 
-                restoreTable.insertAdjacentHTML('beforeend', `<tr><td class="px-4 py-3 text-xs text-slate-400 mono">${entry.timestamp}</td><td class="px-4 py-3 font-bold text-xs text-white">${entry.filename}</td><td class="px-4 py-3 flex gap-2"><button onclick="restoreBackup('${entry.filename}')" class="text-[9px] font-black uppercase text-emerald-500 border border-emerald-500/30 px-3 py-1 rounded hover:bg-emerald-500/10 transition-colors">Restore</button><button onclick="deleteBackupApi('${entry.filename}')" class="text-[9px] font-black uppercase text-red-500 border border-red-500/30 px-3 py-1 rounded hover:bg-red-500/10 transition-colors">Delete</button></td></tr>`);
+                restoreTable.insertAdjacentHTML('beforeend', `<tr><td class="px-4 py-3 text-xs text-slate-400 mono">${entry.timestamp}</td><td class="px-4 py-3 font-bold text-xs" style="color: ${color}">${entry.filename}</td><td class="px-4 py-3 flex gap-2"><button onclick="restoreBackup('${entry.filename}')" class="text-[9px] font-black uppercase text-emerald-500 border border-emerald-500/30 px-3 py-1 rounded hover:bg-emerald-500/10 transition-colors">Restore</button><button onclick="deleteBackupApi('${entry.filename}')" class="text-[9px] font-black uppercase text-red-500 border border-red-500/30 px-3 py-1 rounded hover:bg-red-500/10 transition-colors">Delete</button></td></tr>`);
                 
-                const datePart = entry.timestamp.split(' ')[0].split('-').slice(1).join('.'); 
-                storageChart.data.labels.push(datePart);
-                storageChart.data.datasets[0].data.push(parseFloat(displayValNumeric));
+                // Datum schöner formatieren: "DD.MM. HH:mm"
+                let dateLabel = entry.timestamp;
+                try {
+                    const parts = entry.timestamp.split(' ');
+                    const dateParts = parts[0].split('-'); // [YYYY, MM, DD]
+                    const timeParts = parts[1].split(':'); // [HH, MM, SS]
+                    dateLabel = `${dateParts[2]}.${dateParts[1]}. ${timeParts[0]}:${timeParts[1]}`;
+                } catch(e) {}
+
+                storageChart.data.labels.push(dateLabel);
+                storageChart.data.datasets[0].data.push(chartVal);
+                storageChart.data.datasets[0].backgroundColor.push(colorTransparent); 
+                storageChart.data.datasets[0].borderColor.push(color);            
             });
             
             const totalFmt = formatSize(totalBytes).split(' ');
@@ -1665,17 +1863,159 @@ HTML_TEMPLATE = """
             } else addLog("Löschen fehlgeschlagen.", "error");
         }
 
+        let currentModalFilename = "";
+
         function showDetails(idx) {
             const entry = globalHistory[idx];
+            currentModalFilename = entry.filename;
+            
+            // Basic Meta
             document.getElementById('modal-filename').innerText = entry.filename;
             document.getElementById('modal-hash').innerText = entry.sha256;
             document.getElementById('modal-ts').innerText = entry.timestamp;
             document.getElementById('modal-size').innerText = formatSize(entry.size);
+            
+            // Comment
+            document.getElementById('modal-comment').value = entry.comment || "";
+            
+            // Lock Status UI
+            updateLockUI(entry.locked || false);
+            
+            // Integrity Reset
+            document.getElementById('integrity-result').classList.add('hidden');
+            
+            // Actions
             document.getElementById('modal-delete-btn').onclick = () => { closeHashModal(); deleteBackupApi(entry.filename); };
-            document.getElementById('hash-modal').classList.add('flex');
+            
+            // Reset Tabs
+            switchModalTab('meta');
+            document.getElementById('zip-file-list').innerHTML = '<div class="p-8 text-center text-slate-500 text-xs uppercase tracking-widest animate-pulse">Lade Dateistruktur...</div>';
+            document.getElementById('file-count-badge').innerText = "-- Files";
+            
+            // Show Modal
+            const modal = document.getElementById('hash-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
         }
 
-        function closeHashModal() { document.getElementById('hash-modal').classList.remove('flex'); }
+        function closeHashModal() { 
+            const modal = document.getElementById('hash-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        
+        function switchModalTab(tab) {
+            document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.modal-tab-content').forEach(c => c.classList.add('hidden'));
+            
+            if(tab === 'meta') {
+                document.querySelector('.modal-tab:nth-child(1)').classList.add('active');
+                document.getElementById('tab-meta').classList.remove('hidden');
+            } else {
+                document.querySelector('.modal-tab:nth-child(2)').classList.add('active');
+                document.getElementById('tab-content').classList.remove('hidden');
+                loadZipContent();
+            }
+        }
+        
+        async function loadZipContent() {
+            if(!currentModalFilename) return;
+            // Nur laden wenn noch nicht geladen? Nein, immer laden um aktuell zu sein (obwohl Zip sich nicht ändert)
+            // Cache könnte man machen, aber wir lassen es simpel.
+            
+            const listContainer = document.getElementById('zip-file-list');
+            try {
+                const resp = await fetch('/api/get_zip_content', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({filename: currentModalFilename}) });
+                const data = await resp.json();
+                
+                document.getElementById('file-count-badge').innerText = data.files.length + " Files";
+                
+                let html = '';
+                data.files.forEach(f => {
+                    html += `<div class="file-list-item"><span class="file-icon">📄</span> ${f}</div>`;
+                });
+                listContainer.innerHTML = html;
+            } catch(e) {
+                listContainer.innerHTML = '<div class="p-4 text-red-500 text-xs">Fehler beim Laden der Dateiliste.</div>';
+            }
+        }
+        
+        async function toggleLock() {
+            if(!currentModalFilename) return;
+            try {
+                const resp = await fetch('/api/toggle_lock', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({filename: currentModalFilename}) });
+                const data = await resp.json();
+                if(data.status === 'success') {
+                    // Update Global History locally
+                    const entry = globalHistory.find(h => h.filename === currentModalFilename);
+                    if(entry) entry.locked = data.locked;
+                    
+                    updateLockUI(data.locked);
+                    updateDashboardDisplays(); // Refresh Table Icons
+                    addLog(data.locked ? "Backup locked." : "Backup unlocked.", "info");
+                }
+            } catch(e) { console.error(e); }
+        }
+        
+        function updateLockUI(isLocked) {
+            const badge = document.getElementById('lock-badge');
+            const btn = document.getElementById('btn-lock');
+            
+            if(isLocked) {
+                badge.classList.remove('hidden');
+                btn.innerHTML = '🔒';
+                btn.classList.add('bg-amber-500/20');
+                btn.title = "Unlock";
+            } else {
+                badge.classList.add('hidden');
+                btn.innerHTML = '🔓';
+                btn.classList.remove('bg-amber-500/20');
+                btn.title = "Lock (Vor Löschung schützen)";
+            }
+        }
+        
+        async function saveComment() {
+            const comment = document.getElementById('modal-comment').value;
+            if(!currentModalFilename) return;
+            try {
+                const resp = await fetch('/api/update_comment', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({filename: currentModalFilename, comment}) });
+                const data = await resp.json();
+                if(data.status === 'success') {
+                    const entry = globalHistory.find(h => h.filename === currentModalFilename);
+                    if(entry) entry.comment = comment;
+                    addLog("Kommentar gespeichert.", "success");
+                }
+            } catch(e) { addLog("Fehler beim Speichern.", "error"); }
+        }
+        
+        async function verifyIntegrity() {
+            const resDiv = document.getElementById('integrity-result');
+            resDiv.classList.remove('hidden');
+            // Reset & Loading Style
+            resDiv.className = 'mb-4 p-3 rounded-lg text-center font-bold text-xs tracking-wide border bg-blue-500/10 border-blue-500/20 text-blue-400 animate-pulse';
+            resDiv.innerHTML = '⚡ BERECHNE HASH & VERGLEICHE... BITTE WARTEN...';
+            
+            try {
+                const resp = await fetch('/api/verify_integrity', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({filename: currentModalFilename}) });
+                const data = await resp.json();
+                
+                resDiv.classList.remove('animate-pulse');
+
+                if(data.status === 'success') {
+                    resDiv.className = 'mb-4 p-3 rounded-lg text-center font-bold text-xs tracking-wide border bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]';
+                    resDiv.innerHTML = `✓ ${data.message}`;
+                } else if(data.status === 'mismatch') {
+                    resDiv.className = 'mb-4 p-3 rounded-lg text-center font-bold text-xs tracking-wide border bg-red-500/10 border-red-500/20 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]';
+                    resDiv.innerHTML = `⚠️ ${data.message}`;
+                } else {
+                    resDiv.className = 'mb-4 p-3 rounded-lg text-center font-bold text-xs tracking-wide border bg-red-900/10 border-red-500/20 text-red-400';
+                    resDiv.innerHTML = `Fehler: ${data.message}`;
+                }
+            } catch(e) {
+                resDiv.className = 'mb-4 p-3 rounded-lg text-center font-bold text-xs tracking-wide border bg-red-900/10 border-red-500/20 text-red-400';
+                resDiv.innerHTML = `Systemfehler.`;
+            }
+        }
         async function pickFolder(id) {
             const resp = await fetch('/api/pick_folder');
             const data = await resp.json();
@@ -1828,6 +2168,118 @@ def save_config_api():
     if safe_write_json(CONFIG_FILE, current):
         return jsonify({"status": "success"})
     return jsonify({"status": "error"})
+
+@app.route("/api/toggle_lock", methods=["POST"])
+def toggle_lock():
+    try:
+        data = request.json
+        filename = data.get("filename")
+        history = load_history()
+        found = False
+        new_state = False
+        
+        for entry in history:
+            if entry['filename'] == filename:
+                entry['locked'] = not entry.get('locked', False)
+                new_state = entry['locked']
+                found = True
+                break
+        
+        if found and safe_write_json(HISTORY_FILE, history):
+            return jsonify({"status": "success", "locked": new_state})
+        return jsonify({"status": "error", "message": "Eintrag nicht gefunden"})
+    except Exception as e:
+        logger.error(f"Lock Error: {e}")
+        return jsonify({"status": "error", "message": str(e)})
+
+@app.route("/api/update_comment", methods=["POST"])
+def update_comment():
+    try:
+        data = request.json
+        filename = data.get("filename")
+        comment = data.get("comment", "")
+        history = load_history()
+        
+        for entry in history:
+            if entry['filename'] == filename:
+                entry['comment'] = comment
+                safe_write_json(HISTORY_FILE, history)
+                return jsonify({"status": "success"})
+                
+        return jsonify({"status": "error", "message": "Eintrag nicht gefunden"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+@app.route("/api/get_zip_content", methods=["POST"])
+def get_zip_content():
+    try:
+        filename = request.json.get("filename")
+        config = load_config()
+        dest_path = config.get("default_dest")
+        if not dest_path: return jsonify({"files": []})
+        
+        full_path = os.path.join(dest_path, filename)
+        if not os.path.exists(full_path): return jsonify({"files": []})
+        
+        file_list = []
+        # Lazy Load pyzipper falls nötig (verschlüsselt) oder standard zipfile
+        # Wir versuchen erst Standard Zipfile für Speed
+        try:
+            with zipfile.ZipFile(full_path, 'r') as z:
+                # Limit auf 1000 Dateien für Performance
+                file_list = z.namelist()[:1000] 
+                if len(z.namelist()) > 1000:
+                    file_list.append(f"... und {len(z.namelist()) - 1000} weitere")
+        except RuntimeError: # Passwort geschützt?
+             # Wenn Encrypted Header, brauchen wir pyzipper aber wir haben kein PW hier
+             # Für reines Listing ohne Decrypt kann zipfile manchmal funktionieren, aber oft nicht bei AES
+             # Wir geben einen Hinweis zurück
+             return jsonify({"files": ["(Verschlüsseltes Archiv - Inhalt verborgen)"]})
+        except Exception as e:
+             return jsonify({"files": [f"Fehler beim Lesen: {str(e)}"]})
+             
+        return jsonify({"files": file_list})
+    except Exception as e:
+        logger.error(f"Content Error: {e}")
+        return jsonify({"files": []})
+
+@app.route("/api/verify_integrity", methods=["POST"])
+def verify_integrity():
+    try:
+        filename = request.json.get("filename")
+        config = load_config()
+        dest_path = config.get("default_dest")
+        full_path = os.path.join(dest_path, filename)
+        
+        history = load_history()
+        entry = next((h for h in history if h['filename'] == filename), None)
+        
+        if not entry: return jsonify({"status": "error", "message": "Historie Eintrag fehlt"})
+        
+        stored_hash = entry.get('sha256')
+        
+        # Recalculate (das kann dauern, eigentlich async job, aber für Einzeldatei ok)
+        # Wir nutzen calculate_sha256 ohne Salt für reinen File-Hash?
+        # Warte, calculate_sha256 im Code oben nutzt Salt wenn übergeben.
+        # Beim Erstellen wurde `salt=ts` übergeben!
+        # Das ist problematisch für Re-Verification, weil wir den Salt brauchen.
+        # Der Salt war `ts = now.strftime("%Y-%m-%d %H:%M:%S")`.
+        # Dieser Timestamp steht im History Entry.
+        
+        # Check `run_backup_logic`:
+        # sha = calculate_sha256(zip_path, salt=ts)
+        # entry["timestamp"] = ts (exakt dieser String)
+        
+        salt = entry['timestamp']
+        current_hash = calculate_sha256(full_path, salt=salt)
+        
+        if current_hash == stored_hash:
+             return jsonify({"status": "success", "message": "Integrität bestätigt (Bit-Perfect)."})
+        else:
+             return jsonify({"status": "mismatch", "message": "WARNUNG: Hash-Abweichung erkannt!"})
+             
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
 
 @app.route("/api/pick_files")
 def pick_files():
