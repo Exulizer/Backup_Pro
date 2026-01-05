@@ -276,10 +276,7 @@ if %errorlevel% neq 0 pause
             shortcut = shell.CreateShortCut(path)
             shortcut.TargetPath = target
             shortcut.WorkingDirectory = os.getcwd()
-            if os.path.exists("logo.ico"):
-                shortcut.IconLocation = os.path.abspath("logo.ico")
-            else:
-                shortcut.IconLocation = sys.executable
+            shortcut.IconLocation = sys.executable
             shortcut.save()
             return True
         except Exception as e:
@@ -299,7 +296,7 @@ sLinkFile = oWS.SpecialFolders("Desktop") & "\\{APP_NAME}.lnk"
 Set oLink = oWS.CreateShortcut(sLinkFile)
 oLink.TargetPath = "{target}"
 oLink.WorkingDirectory = "{os.getcwd()}"
-oLink.IconLocation = "{os.path.abspath('logo.ico') if os.path.exists('logo.ico') else sys.executable}"
+oLink.IconLocation = "{sys.executable}"
 oLink.Save
 """
             with open(vbs_script, "w") as f:
@@ -382,20 +379,14 @@ oLink.Save
             if target_info:
                 # API Treffer -> Priorität 1
                 candidates.append((target_info["url"], target_info["name"]))
-            
-            # Fallbacks immer hinzufügen als Backup
-            base_url = "https://raw.githubusercontent.com/Exulizer/Backup_Pro"
-            fallback_candidates = [
-                (f"{base_url}/main/versions/backup_app_v7_3.py", "backup_app_v7_3.py"), # Aktuelle Version im versions Ordner
-                (f"{base_url}/main/versions/backup_app_v7_2.py", "backup_app_v7_2.py"),
-                (f"{base_url}/main/versions/backup_app_v7_1.py", "backup_app_v7_1.py"),
-                (f"{base_url}/main/backup_app_v7_1.py", "backup_app_v7_1.py"), # Root Fallback
-            ]
-            
-            for fb in fallback_candidates:
-                # Vermeide Duplikate falls API URL identisch ist
-                if not any(c[0] == fb[0] for c in candidates):
-                    candidates.append(fb)
+            else:
+                # Fallbacks falls API failt (alter Pfad oder Root)
+                base_url = "https://raw.githubusercontent.com/Exulizer/Backup_Pro"
+                candidates = [
+                    (f"{base_url}/main/versions/backup_app_v7_1.py", "backup_app_v7_1.py"), # Hardcoded Fallback im versions Ordner
+                    (f"{base_url}/main/backup_app_v7_1.py", "backup_app_v7_1.py"),
+                    (f"{base_url}/master/backup_app_v7_1.py", "backup_app_v7_1.py")
+                ]
             
             # SSL Context
             ctx = ssl.create_default_context()
@@ -449,22 +440,6 @@ oLink.Save
                 
         threading.Thread(target=_download, daemon=True).start()
 
-    def download_logo(self):
-        try:
-            url = "https://raw.githubusercontent.com/Exulizer/Backup_Pro/main/logo.ico"
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-            
-            req = urllib.request.Request(url, headers={'User-Agent': 'BackupPro-Installer'})
-            with urllib.request.urlopen(req, context=ctx) as response:
-                if response.getcode() == 200:
-                    with open("logo.ico", "wb") as f:
-                        f.write(response.read())
-                    self.log("Logo heruntergeladen.", "success")
-        except Exception:
-            pass 
-
     def start_installation(self):
         self.btn_install.config(state="disabled", bg="#333333")
         self.btn_exit.config(state="disabled")
@@ -516,7 +491,6 @@ oLink.Save
             self.log("start_backup_pro.bat erstellt.", "success")
         
         # 4. Shortcut
-        self.download_logo()
         self.log("Erstelle Desktop-Verknüpfung...", "info")
         self.root.after(0, lambda: self.progress.configure(value=100))
         if self.create_shortcut():
