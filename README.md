@@ -1,5 +1,9 @@
 # 🛡️ Backup OS Pro - Commander Edition
 
+<p align="center">
+  <img src="https://github.com/Exulizer/Backup_Pro/blob/main/assets/backup_os.jpg?raw=true" width="500" alt="Backup OS Pro Dashboard">
+</p>
+
 **Backup OS Pro** ist ein hochmodernes, hybrides Backup-System für **Windows 10/11**, das professionelle Datensicherheit mit einer intuitiven **Weboberfläche** verbindet.
 
 Es wurde entwickelt, um Projekte und wichtige Verzeichnisse nicht nur zu archivieren, sondern **kryptografisch zu sichern**, in die Cloud zu replizieren und bei Bedarf mit einem Klick wiederherzustellen.
@@ -80,7 +84,7 @@ Dank des intelligenten Launchers ist das Aktualisieren kinderleicht:
 
 ## **🛠️ KONFIGURATION**
 
-Öffnen Sie das Dashboard unter **http://127.0.0.1:5000** (startet automatisch).
+Das Dashboard öffnet sich automatisch in Ihrem Standard-Browser (meist unter **http://127.0.0.1:5000**). Sollte der Port belegt sein, wählt das System automatisch einen freien Alternativ-Port.
 
 ### **Verschlüsselung aktivieren**
 1. Gehen Sie auf **"Parameter"**.
@@ -94,6 +98,4 @@ Dank des intelligenten Launchers ist das Aktualisieren kinderleicht:
 
 ---
 
-## **📄 LIZENZ **
-
-** © 2025 Copyright Exulizer **
+Copyright &copy; 2025 Exulizer
