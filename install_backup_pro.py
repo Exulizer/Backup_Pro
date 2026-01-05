@@ -292,11 +292,16 @@ if %errorlevel% neq 0 pause
             
             vbs_content = f"""
 Set oWS = WScript.CreateObject("WScript.Shell")
+Set FSO = CreateObject("Scripting.FileSystemObject")
 sLinkFile = oWS.SpecialFolders("Desktop") & "\\{APP_NAME}.lnk"
 Set oLink = oWS.CreateShortcut(sLinkFile)
 oLink.TargetPath = "{target}"
 oLink.WorkingDirectory = "{os.getcwd()}"
-oLink.IconLocation = "{sys.executable}"
+if FSO.FileExists("{os.path.join(os.getcwd(), 'logo.ico')}") then
+    oLink.IconLocation = "{os.path.join(os.getcwd(), 'logo.ico')}"
+else
+    oLink.IconLocation = "{sys.executable}"
+end if
 oLink.Save
 """
             with open(vbs_script, "w") as f:
@@ -379,14 +384,19 @@ oLink.Save
             if target_info:
                 # API Treffer -> Priorität 1
                 candidates.append((target_info["url"], target_info["name"]))
-            else:
-                # Fallbacks falls API failt (alter Pfad oder Root)
-                base_url = "https://raw.githubusercontent.com/Exulizer/Backup_Pro"
-                candidates = [
-                    (f"{base_url}/main/versions/backup_app_v7_1.py", "backup_app_v7_1.py"), # Hardcoded Fallback im versions Ordner
-                    (f"{base_url}/main/backup_app_v7_1.py", "backup_app_v7_1.py"),
-                    (f"{base_url}/master/backup_app_v7_1.py", "backup_app_v7_1.py")
-                ]
+            
+            # Fallbacks immer hinzufügen als Backup
+            base_url = "https://raw.githubusercontent.com/Exulizer/Backup_Pro"
+            fallback_candidates = [
+                (f"{base_url}/main/versions/backup_app_v7_3.py", "backup_app_v7_3.py"), # Aktuelle Version
+                (f"{base_url}/main/versions/backup_app_v7_2.py", "backup_app_v7_2.py"),
+                (f"{base_url}/main/versions/backup_app_v7_1.py", "backup_app_v7_1.py"),
+            ]
+            
+            for fb in fallback_candidates:
+                # Vermeide Duplikate falls API URL identisch ist
+                if not any(c[0] == fb[0] for c in candidates):
+                    candidates.append(fb)
             
             # SSL Context
             ctx = ssl.create_default_context()
@@ -431,6 +441,19 @@ oLink.Save
                 self.root.after(0, lambda: messagebox.showinfo("Download", f"Die App ({downloaded_file}) wurde erfolgreich heruntergeladen!"))
                 # Aktualisiere app_script Variable falls sich der Name geändert hat
                 self.app_script = downloaded_file
+
+                # Logo Download Versuch
+                try:
+                    logo_url = "https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.ico?raw=true"
+                    self.root.after(0, lambda: self.log("Lade Logo herunter...", "info"))
+                    with urllib.request.urlopen(logo_url, context=ctx) as response:
+                        if response.getcode() == 200:
+                            with open("logo.ico", "wb") as f:
+                                f.write(response.read())
+                            self.root.after(0, lambda: self.log("Logo erfolgreich geladen.", "success"))
+                except Exception as e:
+                    self.root.after(0, lambda err=e: self.log(f"Logo Download übersprungen: {err}", "warn"))
+
             else:
                 self.root.after(0, lambda: self.log(f"Download fehlgeschlagen.", "error"))
                 self.root.after(0, lambda: messagebox.showerror("Fehler", f"Konnte keine gültige App-Datei finden.\nLetzter Fehler: {last_error}"))
