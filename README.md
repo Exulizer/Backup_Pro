@@ -94,6 +94,6 @@ Dank des intelligenten Launchers ist das Aktualisieren kinderleicht:
 
 ---
 
-## **📄 LIZENZ**
+## **📄 LIZENZ **
 
-** © 2025 Copyright Exulizer**
+** © 2025 Copyright Exulizer **
