@@ -5,20 +5,20 @@ import webbrowser
 import json
 import time
 import zipfile
-# import pyzipper -> Lazy Loaded
+import pyzipper
 import fnmatch
 import subprocess
 import threading
 import logging
 import errno
-# import paramiko -> Lazy Loaded
+import paramiko
 import socket
 import sys
 from datetime import datetime
 from collections import defaultdict
-from flask import Flask, render_template_string, jsonify, request, send_file, Response, redirect
-# import tkinter as tk -> Lazy Loaded
-# from tkinter import filedialog, messagebox -> Lazy Loaded
+from flask import Flask, render_template_string, jsonify, request
+import tkinter as tk
+from tkinter import filedialog, messagebox
 
 # --- Konfiguration & Logging ---
 
@@ -55,17 +55,6 @@ CONFIG_FILE = os.path.join(BASE_DIR, "backup_config.json")
 def ensure_files_exist():
     """Initialisierung der Systemdateien beim ersten Start mit Fehlerprüfung."""
     try:
-        # Logo Check & Download
-        logo_path = os.path.join(BASE_DIR, "logo.ico")
-        if not os.path.exists(logo_path):
-            try:
-                import urllib.request
-                url = "https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.ico?raw=true"
-                logger.info("Lade Logo herunter...")
-                urllib.request.urlretrieve(url, logo_path)
-            except Exception as e:
-                logger.warning(f"Konnte Logo nicht laden: {e}")
-
         if not os.path.exists(HISTORY_FILE):
             with open(HISTORY_FILE, "w", encoding="utf-8") as f:
                 json.dump([], f)
@@ -162,33 +151,19 @@ def is_excluded(item_name, exclusions):
 def apply_retention(dest_path, limit):
     """
     Entfernt alte Backups basierend auf dem Namen (enthält Zeitstempel).
-    Respektiert 'locked' Status aus der Historie.
+    Nutzt lexikographische Sortierung, da Zeitstempel im Format YYYY-MM-DD sind.
     """
     try:
         if not os.path.exists(dest_path):
             return []
-            
-        # Lade Historie um Locked-Status zu prüfen
-        history = load_history()
-        locked_filenames = {h['filename'] for h in history if h.get('locked', False)}
-        
         # Nur ZIP Dateien erfassen, die dem Backup-Schema entsprechen
         backups = [f for f in os.listdir(dest_path) if f.startswith("backup_") and f.endswith(".zip")]
         # Sortierung nach Name ist bei diesem Zeitstempelformat chronologisch korrekt
         backups.sort()
         
-        # Filtere gelockte Backups aus der Lösch-Liste heraus (sie zählen nicht gegen das Limit oder werden übersprungen)
-        # Strategie: Wir zählen nur nicht-gelockte Backups gegen das Limit.
-        # D.h. wenn Limit=10 und ich habe 5 Locked + 8 Normal = 13 Total.
-        # Ich lösche so lange die ältesten Normalen, bis ich <= 10 Normale habe?
-        # Oder Strict Count: Total <= 10, aber Locked darf nicht gelöscht werden?
-        # User-Friendly: Locked zählt NICHT ins Limit (Bonus-Storage).
-        
-        deletable_backups = [b for b in backups if b not in locked_filenames]
-        
         deleted = []
-        while len(deletable_backups) > limit:
-            oldest_filename = deletable_backups.pop(0)
+        while len(backups) > limit:
+            oldest_filename = backups.pop(0)
             full_path = os.path.join(dest_path, oldest_filename)
             if os.path.exists(full_path):
                 try:
@@ -420,7 +395,6 @@ def run_backup_logic(source, dest, comment="Automatisches Backup"):
         
         # Verwende ZIP_DEFLATED für Kompression, optional AES-Verschlüsselung
         if enc_enabled and enc_pw:
-            import pyzipper # Lazy Load
             logger.info("Verschlüsselung (AES) aktiviert.")
             # pyzipper verwenden für AES
             zip_ctx = pyzipper.AESZipFile(zip_path, 'w', compression=pyzipper.ZIP_DEFLATED, encryption=pyzipper.WZ_AES)
@@ -506,7 +480,6 @@ def run_backup_logic(source, dest, comment="Automatisches Backup"):
                 c_path = config.get("cloud_target_path", "/backups")
                 
                 if c_host and c_user:
-                    import paramiko # Lazy Load
                     ssh = paramiko.SSHClient()
                     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                     ssh.connect(c_host, username=c_user, password=c_pass)
@@ -608,8 +581,8 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Backup OS Pro Commander v7.3 - Hybrid Kernel Edition</title>
-    <link rel="icon" href="https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.ico?raw=true">
+    <title>Backup OS Pro Commander v7.2 - Hybrid Kernel Edition</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -668,137 +641,19 @@ HTML_TEMPLATE = """
         .unit-btn { padding: 4px 10px; font-size: 10px; font-weight: 900; border-radius: 4px; cursor: pointer; transition: all 0.2s; color: #64748b; }
         .unit-btn.active { background: var(--accent); color: white; box-shadow: 0 0 10px rgba(0, 132, 255, 0.3); }
         .unit-btn:not(.active):hover { background: rgba(255,255,255,0.05); color: #c0c8d6; }
-
-        /* --- Klipper-Style Loader --- */
-        #startup-loader {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-color: #050505;
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            transition: opacity 0.5s ease-out;
-        }
-        .loader-content {
-            width: 300px;
-            text-align: center;
-        }
-        .loader-logo {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-            animation: pulse-glow 2s infinite;
-        }
-        .loader-bar-bg {
-            width: 100%;
-            height: 4px;
-            background: #1f2430;
-            border-radius: 2px;
-            overflow: hidden;
-            margin-top: 1rem;
-            position: relative;
-        }
-        .loader-bar-fill {
-            height: 100%;
-            background: #0084ff;
-            width: 0%;
-            animation: load-progress 2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-            box-shadow: 0 0 10px #0084ff;
-        }
-        .loader-text {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 10px;
-            color: #0084ff;
-            margin-top: 0.5rem;
-            letter-spacing: 0.2em;
-            text-transform: uppercase;
-        }
-        @keyframes pulse-glow {
-            0% { text-shadow: 0 0 10px rgba(0,132,255,0.2); opacity: 0.8; }
-            50% { text-shadow: 0 0 25px rgba(0,132,255,0.6); opacity: 1; }
-            100% { text-shadow: 0 0 10px rgba(0,132,255,0.2); opacity: 0.8; }
-        }
-        @keyframes load-progress {
-            0% { width: 0%; }
-            30% { width: 40%; }
-            70% { width: 80%; }
-            100% { width: 100%; }
-        }
-        
-        /* Modal Tabs */
-        .modal-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px; }
-        .modal-tab { 
-            padding: 10px 20px; 
-            font-size: 11px; 
-            font-weight: 900; 
-            text-transform: uppercase; 
-            letter-spacing: 0.1em; 
-            color: #64748b; 
-            cursor: pointer; 
-            border-bottom: 2px solid transparent; 
-            transition: all 0.2s;
-        }
-        .modal-tab:hover { color: #94a3b8; }
-        .modal-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
-        
-        .file-list { max-height: 300px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
-        .file-list-item { 
-            padding: 6px 12px; 
-            border-bottom: 1px solid rgba(255,255,255,0.05); 
-            font-family: 'JetBrains Mono', monospace; 
-            font-size: 10px; 
-            color: #cbd5e1; 
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .file-list-item:last-child { border-bottom: none; }
-        .file-icon { color: #3b82f6; font-size: 10px; }
     </style>
 </head>
 <body class="flex h-screen overflow-hidden text-slate-300">
 
-    <!-- Startup Loader -->
-    <div id="startup-loader">
-        <div class="loader-content">
-            <img src="https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.ico?raw=true" class="w-24 h-24 mx-auto mb-4 animate-pulse" alt="Backup OS">
-            <div class="text-xl font-black text-white tracking-[0.3em] uppercase mb-1">BACKUP<span class="text-blue-500">OS</span></div>
-            <div class="text-[9px] text-slate-500 uppercase tracking-widest mb-6">Hybrid Kernel v7.3</div>
-            
-            <div class="loader-bar-bg">
-                <div class="loader-bar-fill"></div>
-            </div>
-            <div class="flex justify-between items-center mt-2 w-64">
-                 <div class="loader-text" id="loader-msg">INITIALIZING...</div>
-                 <div class="loader-text text-blue-500" id="loader-percent">0%</div>
-            </div>
-            <div id="loader-console" class="text-[9px] font-mono text-slate-600 mt-2 h-4 overflow-hidden text-center uppercase tracking-wider"></div>
-        </div>
-    </div>
-
     <!-- Detail Modal -->
-    <div id="hash-modal" class="fixed inset-0 z-[999] items-center justify-center p-4 hidden">
-        <div class="modal-content bg-[#11141d] border border-[#0084ff55] w-full max-w-4xl rounded-2xl p-8 relative shadow-2xl text-slate-200 flex flex-col max-h-[90vh]">
-            <button onclick="closeHashModal()" class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors z-10">✕</button>
-            
-            <div class="flex items-center gap-3 mb-2">
-                <img src="https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.ico?raw=true" class="w-10 h-10 rounded bg-blue-500/20 p-1" alt="Logo">
-                <h3 class="text-lg font-black uppercase tracking-widest text-white">Snapshot Inspektor</h3>
-                <div id="lock-badge" class="hidden bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
-                    <span>🔒</span> RETENTION LOCK
-                </div>
+    <div id="hash-modal" class="fixed inset-0 z-[999] items-center justify-center p-4">
+        <div class="modal-content bg-[#11141d] border border-[#0084ff55] w-full max-w-2xl rounded-2xl p-8 relative shadow-2xl text-slate-200">
+            <button onclick="closeHashModal()" class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">✕</button>
+            <div class="flex items-center gap-3 mb-6">
+                <div class="p-2 bg-blue-500/20 rounded text-blue-400">🛡️</div>
+                <h3 class="text-lg font-black uppercase tracking-widest text-white">Snapshot Integrität</h3>
             </div>
-
-            <!-- Integrity Result (Prominent) -->
-            <div id="integrity-result" class="mb-4 hidden p-3 rounded-lg text-center font-bold text-xs tracking-wide border"></div>
-
-            <div class="modal-tabs">
-                <div class="modal-tab active" onclick="switchModalTab('meta')">Metadaten</div>
-                <div class="modal-tab" onclick="switchModalTab('content')">Inhalt (Dateien)</div>
-            </div>
-
-            <div id="tab-meta" class="modal-tab-content space-y-6 overflow-y-auto pr-2">
+            <div class="space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label class="text-[11px] text-slate-500 uppercase font-black mb-2 block tracking-widest">Dateiname</label>
@@ -806,65 +661,31 @@ HTML_TEMPLATE = """
                     </div>
                     <div>
                         <label class="text-[11px] text-slate-500 uppercase font-black mb-2 block tracking-widest">Status</label>
-                        <div class="flex gap-2">
-                            <div class="bg-green-500/10 p-3 rounded border border-green-500/20 text-xs font-bold text-green-500 uppercase flex items-center gap-2 flex-1">
-                                <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span> Verifiziert
-                            </div>
-                            <button id="btn-lock" onclick="toggleLock()" class="bg-amber-500/10 p-3 rounded border border-amber-500/20 text-amber-500 hover:bg-amber-500/20 transition-colors" title="Retention Lock umschalten">
-                                🔓
-                            </button>
+                        <div class="bg-green-500/10 p-3 rounded border border-green-500/20 text-xs font-bold text-green-500 uppercase flex items-center gap-2">
+                             <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span> Verifiziert
                         </div>
                     </div>
                 </div>
-                
-                <div>
-                    <label class="text-[11px] text-slate-500 uppercase font-black mb-2 block tracking-widest">Kommentar</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="modal-comment" class="flex-1 bg-black/40 border border-white/5 rounded p-3 text-xs text-white outline-none focus:border-blue-500 transition-colors" placeholder="Kein Kommentar...">
-                        <button onclick="saveComment()" class="px-4 bg-blue-600/20 border border-blue-600/40 text-blue-400 rounded hover:bg-blue-600/30 transition-colors text-[10px] font-black uppercase tracking-widest">Save</button>
-                    </div>
-                </div>
-
                 <div>
                     <label class="text-[11px] text-slate-500 uppercase font-black mb-2 block tracking-widest">SHA256 Signatur</label>
                     <div id="modal-hash" class="bg-black/40 p-4 rounded border border-white/5 text-[11px] mono text-white break-all leading-relaxed shadow-inner"></div>
                 </div>
-                
                 <div class="grid grid-cols-2 gap-6 bg-black/20 p-4 rounded-xl">
                     <div><label class="text-[11px] text-slate-500 uppercase font-black block mb-1">Zeitpunkt</label><div id="modal-ts" class="text-sm font-bold text-white"></div></div>
                     <div><label class="text-[11px] text-slate-500 uppercase font-black block mb-1">Größe</label><div id="modal-size" class="text-sm font-bold text-white"></div></div>
                 </div>
-
-                <div class="border-t border-white/5 pt-6">
-                    <label class="text-[11px] text-slate-500 uppercase font-black mb-4 block tracking-widest">Erweiterte Aktionen</label>
-                    <div class="flex gap-4">
-                        <button onclick="verifyIntegrity()" id="btn-integrity" class="flex-1 bg-emerald-900/10 py-3 rounded text-[11px] font-black uppercase tracking-widest hover:bg-emerald-900/20 transition-all text-emerald-500 border border-emerald-500/20 flex items-center justify-center gap-2">
-                            <span>⚡</span> Integrität Prüfen (Deep Scan)
-                        </button>
-                        <button id="modal-delete-btn" class="flex-1 bg-red-900/10 py-3 rounded text-[11px] font-black uppercase tracking-widest hover:bg-red-900/20 transition-all text-red-500 border border-red-500/20 flex items-center justify-center gap-2">
-                            <span>✕</span> Snapshot Löschen
-                        </button>
-                    </div>
-                </div>
             </div>
-
-            <div id="tab-content" class="modal-tab-content hidden flex-1 flex flex-col min-h-0">
-                <div class="flex justify-between items-center mb-4">
-                    <span class="text-[11px] text-slate-500 uppercase font-black tracking-widest">Enthaltene Dateien</span>
-                    <span id="file-count-badge" class="text-[10px] bg-white/10 px-2 py-1 rounded text-white font-mono">-- Files</span>
-                </div>
-                <div id="zip-file-list" class="file-list flex-1">
-                    <div class="p-8 text-center text-slate-500 text-xs uppercase tracking-widest animate-pulse">Lade Dateistruktur...</div>
-                </div>
+            <div class="flex gap-4 mt-8">
+                <button onclick="copyHash()" class="flex-1 bg-[#1a1e2a] py-3 rounded text-[11px] font-black uppercase tracking-widest hover:bg-slate-700 transition-all text-white border border-white/5">Signatur kopieren</button>
+                <button id="modal-delete-btn" class="flex-1 bg-red-900/20 py-3 rounded text-[11px] font-black uppercase tracking-widest hover:bg-red-900/40 transition-all text-red-500 border border-red-500/20">Löschen</button>
             </div>
-
         </div>
     </div>
 
     <!-- Sidebar -->
     <aside class="w-64 bg-[#0d0f16] border-r border-[#1a1e2a] flex flex-col z-50">
         <div class="p-6 border-b border-[#1a1e2a] flex items-center gap-3">
-            <img src="https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.ico?raw=true" class="w-10 h-10 rounded-lg shadow-lg bg-[#0084ff] p-1" alt="Logo">
+            <div class="p-2 bg-[#0084ff] rounded-lg shadow-lg">🛡️</div>
             <div class="flex flex-col">
                 <span class="font-black text-white leading-none">BACKUP OS</span>
                 <span class="text-[10px] text-[#0084ff] font-bold tracking-widest uppercase">Commander Pro</span>
@@ -919,7 +740,7 @@ HTML_TEMPLATE = """
         <header class="h-14 bg-[#0d0f16] border-b border-[#1a1e2a] flex items-center justify-between px-8">
             <div class="flex items-center gap-4">
                 <span class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]"></span>
-                <span class="text-[12px] font-black uppercase tracking-widest text-white">v7.3 Hybrid Kernel | Creator: Exulizer</span>
+                <span class="text-[12px] font-black uppercase tracking-widest text-white">v7.2 Hybrid Kernel | Creator: Exulizer</span>
             </div>
             <div class="flex items-center gap-6">
                 <div class="flex items-center gap-4 mr-4">
@@ -1045,7 +866,7 @@ HTML_TEMPLATE = """
                 <h2 class="text-[12px] text-slate-500 uppercase font-bold mb-6 tracking-widest">Snapshot Historie</h2>
                 <div class="overflow-x-auto">
                     <table class="min-w-full text-left text-sm">
-                        <thead><tr class="text-slate-500 uppercase text-[10px] font-black"><th class="px-4 py-3">Datum</th><th class="px-4 py-3">Datei</th><th class="px-4 py-3 text-right" id="history-size-header">Größe</th></tr></thead>
+                        <thead><tr class="text-slate-500 uppercase text-[10px] font-black"><th class="px-4 py-3">Datum</th><th class="px-4 py-3">Datei</th><th class="px-4 py-3 text-right" id="history-size-header">Größe (MB)</th></tr></thead>
                         <tbody id="history-table-body"></tbody>
                     </table>
                 </div>
@@ -1283,14 +1104,6 @@ HTML_TEMPLATE = """
                         <h3 class="text-lg font-bold text-white mb-3 group-hover:text-blue-400 transition-colors"><span class="text-blue-500/50 mr-2">06</span> System Health (Ampel)</h3>
                         <p class="text-sm text-slate-400 leading-relaxed">Die "System Health" in der Zentrale ist wie eine Ampel. Grün ist super. Gelb heißt "naja". Rot heißt "Achtung!". Wenn sie rot ist, sollten Sie dringend ein Backup machen oder Speicherplatz freigeben.</p>
                     </div>
-                    <div class="handbook-item p-6 bg-[#0f111a] rounded-xl border border-white/5 hover:border-blue-500/30 transition-all group">
-                        <h3 class="text-lg font-bold text-white mb-3 group-hover:text-blue-400 transition-colors"><span class="text-blue-500/50 mr-2">07</span> Snapshot Inspektor & Lock</h3>
-                        <p class="text-sm text-slate-400 leading-relaxed">Klicken Sie in der Liste auf ein Backup, um Details zu sehen. <strong class="text-emerald-400">Neu:</strong> Im Tab "Inhalt" sehen Sie alle Dateien im ZIP, ohne Restore! Mit dem <strong class="text-amber-500">Schloss-Symbol (Lock)</strong> können Sie wichtige Backups sperren – sie werden dann nie automatisch gelöscht, auch wenn das Limit erreicht ist.</p>
-                    </div>
-                    <div class="handbook-item p-6 bg-[#0f111a] rounded-xl border border-white/5 hover:border-blue-500/30 transition-all group">
-                        <h3 class="text-lg font-bold text-white mb-3 group-hover:text-blue-400 transition-colors"><span class="text-blue-500/50 mr-2">08</span> Deep Scan (Integrität)</h3>
-                        <p class="text-sm text-slate-400 leading-relaxed">Im Inspektor finden Sie den Button <strong class="text-emerald-400">INTEGRITÄT PRÜFEN</strong>. Das ist ein Gesundheitscheck: Das Programm berechnet den digitalen Fingerabdruck (Hash) neu und vergleicht ihn. So erkennen Sie sofort, ob Dateien auf der Festplatte beschädigt wurden (Bit Rot).</p>
-                    </div>
                 </div>
 
                 <!-- Profi Tipps -->
@@ -1312,34 +1125,6 @@ HTML_TEMPLATE = """
     </main>
 
     <script>
-        // Boot Sequence Simulation
-        (function() {
-            const msgs = [
-                "LOADING KERNEL MODULES...",
-                "MOUNTING VIRTUAL FILESYSTEM...",
-                "CHECKING INTEGRITY...",
-                "LOADING CONFIGURATION...",
-                "ESTABLISHING SECURE LINK...",
-                "STARTING DAEMON PROCESSES...",
-                "SYSTEM READY."
-            ];
-            let i = 0;
-            const interval = setInterval(() => {
-                const consoleEl = document.getElementById('loader-console');
-                const percentEl = document.getElementById('loader-percent');
-                
-                if(i >= msgs.length) {
-                    clearInterval(interval);
-                    if(consoleEl) consoleEl.innerText = "> WAITING FOR BACKEND...";
-                    return;
-                }
-                
-                if(consoleEl) consoleEl.innerText = "> " + msgs[i];
-                if(percentEl) percentEl.innerText = Math.round(((i + 1) / msgs.length) * 100) + "%";
-                i++;
-            }, 200);
-        })();
-
         let storageChart = null;
         let globalHistory = [];
         let currentDiskUsedPercent = 0;
@@ -1405,43 +1190,23 @@ HTML_TEMPLATE = """
             document.querySelectorAll('.unit-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById('unit-' + unit.toLowerCase()).classList.add('active');
             const header = document.getElementById('history-size-header');
-            if(header) header.innerText = `Größe`; // Einheit wird jetzt pro Zeile angezeigt
+            if(header) header.innerText = `Größe (${unit})`;
             updateDashboardDisplays();
         }
 
         /**
-         * Formatiert Byte-Werte intelligent.
-         * Beachtet die globale Einheit (GB/MB), schaltet aber bei kleinen Werten automatisch runter,
-         * um "0,00 GB" zu vermeiden (z.B. 500 KB statt 0,00 GB).
+         * Formatiert Byte-Werte basierend auf der gewählten Einheit.
+         * Erhöht die Präzision im GB Modus für kleine Werte, um "0,0 GB" zu vermeiden.
          */
         function formatSize(bytes) {
-            if (!bytes || bytes === 0) return "0,00 " + globalUnit;
+            if (!bytes || bytes === 0) return "0,0 " + globalUnit;
+            const isGB = globalUnit === 'GB';
+            const divisor = isGB ? (1024**3) : (1024**2);
+            let val = bytes / divisor;
             
-            const G = 1024**3;
-            const M = 1024**2;
-            const K = 1024;
-            
-            // Wenn GB als Basis gewählt ist
-            if (globalUnit === 'GB') {
-                // Unter 10 MB -> Anzeige in MB oder KB
-                if (bytes < 0.01 * G) { 
-                    if (bytes < 0.1 * M) { // Unter 100 KB -> Anzeige in KB
-                        return (bytes / K).toFixed(1).replace('.', ',') + " KB";
-                    }
-                    return (bytes / M).toFixed(2).replace('.', ',') + " MB";
-                }
-                return (bytes / G).toFixed(2).replace('.', ',') + " GB";
-            }
-            
-            // Wenn MB als Basis gewählt ist
-            if (globalUnit === 'MB') {
-                 if (bytes < 0.1 * M) { // Unter 100 KB -> Anzeige in KB
-                    return (bytes / K).toFixed(1).replace('.', ',') + " KB";
-                }
-                return (bytes / M).toFixed(2).replace('.', ',') + " MB";
-            }
-            
-            return (bytes / M).toFixed(2).replace('.', ',') + " MB"; // Fallback
+            // Dynamische Präzision: Wenn GB gewählt ist und der Wert klein ist (< 0.1), zeigen wir 2 Stellen.
+            const precision = (isGB && val < 0.1 && val > 0) ? 2 : 1;
+            return val.toFixed(precision).replace('.', ',') + " " + globalUnit;
         }
 
         function switchTab(tabId) {
@@ -1495,50 +1260,16 @@ HTML_TEMPLATE = """
         function initChart() {
             const ctx = document.getElementById('storageChart').getContext('2d');
             storageChart = new Chart(ctx, {
-                type: 'bar',
-                data: { 
-                    labels: [], 
-                    datasets: [{ 
-                        label: 'Snapshot Size', 
-                        data: [], 
-                        backgroundColor: [], 
-                        borderColor: [], 
-                        borderWidth: 1,
-                        borderRadius: 4,
-                        barPercentage: 0.9,
-                        categoryPercentage: 0.8
-                    }]
-                },
+                type: 'line',
+                data: { labels: [], datasets: [{ 
+                    label: 'Snapshot Size', data: [], borderColor: '#0084ff', backgroundColor: 'rgba(0, 132, 255, 0.05)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 4, pointBackgroundColor: '#0084ff'
+                }]},
                 options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
-                    },
-                    plugins: { 
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: 'rgba(17, 20, 29, 0.9)',
-                            titleColor: '#94a3b8',
-                            bodyColor: '#fff',
-                            bodyFont: { family: 'JetBrains Mono' },
-                            callbacks: {
-                                label: function(context) {
-                                    return "Größe: " + context.parsed.y + " " + globalUnit;
-                                }
-                            }
-                        }
-                    }, 
+                    responsive: true, maintainAspectRatio: false, 
+                    plugins: { legend: { display: false } }, 
                     scales: { 
-                        x: { 
-                            grid: { display: false }, 
-                            ticks: { color: '#64748b', font: { size: 9, family: 'JetBrains Mono' }, maxRotation: 45, minRotation: 45 } 
-                        }, 
-                        y: { 
-                            grid: { color: 'rgba(255,255,255,0.05)' }, 
-                            ticks: { color: '#475569', font: { size: 9 }, callback: function(value) { return value + ' ' + globalUnit; } } 
-                        } 
+                        x: { grid: { display: false }, ticks: { color: '#666', font: { size: 9 } } }, 
+                        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#475569', font: { size: 9 } } } 
                     } 
                 }
             });
@@ -1616,38 +1347,6 @@ HTML_TEMPLATE = """
                 const hResp = await fetch('/api/get_history');
                 globalHistory = await hResp.json();
                 updateDashboardDisplays();
-
-                // Ladeanimation ausblenden - mit simuliertem Progress für "Lazy Load" Effekt
-                const loader = document.getElementById('startup-loader');
-                if(loader) {
-                    const consoleEl = document.getElementById('loader-console');
-                    const percentEl = document.getElementById('loader-percent');
-                    const barFill = document.querySelector('.loader-bar-fill');
-                    
-                    const steps = [
-                        { p: 30, msg: "LOADING KERNEL MODULES..." },
-                        { p: 55, msg: "CONNECTING TO UI ENGINE..." },
-                        { p: 75, msg: "VERIFYING INTEGRITY..." },
-                        { p: 90, msg: "STARTING SERVICES..." },
-                        { p: 100, msg: "READY." }
-                    ];
-
-                    let stepIdx = 0;
-                    const stepInterval = setInterval(() => {
-                        if(stepIdx >= steps.length) {
-                            clearInterval(stepInterval);
-                            loader.style.opacity = '0';
-                            setTimeout(() => { loader.style.display = 'none'; }, 500);
-                            return;
-                        }
-                        const s = steps[stepIdx];
-                        if(consoleEl) consoleEl.innerText = s.msg;
-                        if(percentEl) percentEl.innerText = s.p + "%";
-                        if(barFill) barFill.style.width = s.p + "%";
-                        stepIdx++;
-                    }, 300); // Alle 300ms ein Schritt
-                }
-
             } catch(e) { console.error("Load Error:", e); }
         }
 
@@ -1660,47 +1359,24 @@ HTML_TEMPLATE = """
             let totalBytes = 0;
             storageChart.data.labels = [];
             storageChart.data.datasets[0].data = [];
-            storageChart.data.datasets[0].backgroundColor = [];
-            storageChart.data.datasets[0].borderColor = [];
 
-            [...globalHistory].reverse().forEach((entry, idx) => {
+            [...globalHistory].reverse().forEach((entry) => {
                 totalBytes += entry.size;
-                const formatted = formatSize(entry.size); // Smart String (z.B. "500 KB" oder "2,5 GB")
+                const formatted = formatSize(entry.size);
+                const displayValNumeric = formatted.split(' ')[0].replace(',', '.');
                 const originalIdx = globalHistory.indexOf(entry);
-
-                // Chart Value STRICT in globalUnit calc
-                const isGB = globalUnit === 'GB';
-                const chartDivisor = isGB ? (1024**3) : (1024**2);
-                const chartVal = entry.size / chartDivisor;
-
-                // Zufällige Farbe für jeden Eintrag (Hue-basiert für korrekte Transparenz)
-                const hue = Math.floor(Math.random() * 360);
-                const color = `hsl(${hue}, 70%, 60%)`;
-                const colorTransparent = `hsla(${hue}, 70%, 60%, 0.2)`;
-                
-                const lockIcon = entry.locked ? '<span title="Locked" class="ml-2 text-[10px]">🔒</span>' : '';
 
                 table.insertAdjacentHTML('beforeend', `<tr onclick="showDetails(${originalIdx})" class="bg-white/5 border-b border-white/5 cursor-pointer hover:bg-white/10 transition-all">
                     <td class="px-4 py-3 mono text-[10px] text-slate-400">${entry.timestamp}</td>
-                    <td class="px-4 py-3 font-bold text-xs" style="color: ${color}">${entry.filename}${lockIcon}</td>
-                    <td class="px-4 py-3 text-right mono text-white text-xs">${formatted}</td>
+                    <td class="px-4 py-3 font-bold text-blue-400 text-xs">${entry.filename}</td>
+                    <td class="px-4 py-3 text-right mono text-white text-xs">${formatted.split(' ')[0]}</td>
                 </tr>`);
                 
-                restoreTable.insertAdjacentHTML('beforeend', `<tr><td class="px-4 py-3 text-xs text-slate-400 mono">${entry.timestamp}</td><td class="px-4 py-3 font-bold text-xs" style="color: ${color}">${entry.filename}</td><td class="px-4 py-3 flex gap-2"><button onclick="restoreBackup('${entry.filename}')" class="text-[9px] font-black uppercase text-emerald-500 border border-emerald-500/30 px-3 py-1 rounded hover:bg-emerald-500/10 transition-colors">Restore</button><button onclick="deleteBackupApi('${entry.filename}')" class="text-[9px] font-black uppercase text-red-500 border border-red-500/30 px-3 py-1 rounded hover:bg-red-500/10 transition-colors">Delete</button></td></tr>`);
+                restoreTable.insertAdjacentHTML('beforeend', `<tr><td class="px-4 py-3 text-xs text-slate-400 mono">${entry.timestamp}</td><td class="px-4 py-3 font-bold text-xs text-white">${entry.filename}</td><td class="px-4 py-3 flex gap-2"><button onclick="restoreBackup('${entry.filename}')" class="text-[9px] font-black uppercase text-emerald-500 border border-emerald-500/30 px-3 py-1 rounded hover:bg-emerald-500/10 transition-colors">Restore</button><button onclick="deleteBackupApi('${entry.filename}')" class="text-[9px] font-black uppercase text-red-500 border border-red-500/30 px-3 py-1 rounded hover:bg-red-500/10 transition-colors">Delete</button></td></tr>`);
                 
-                // Datum schöner formatieren: "DD.MM. HH:mm"
-                let dateLabel = entry.timestamp;
-                try {
-                    const parts = entry.timestamp.split(' ');
-                    const dateParts = parts[0].split('-'); // [YYYY, MM, DD]
-                    const timeParts = parts[1].split(':'); // [HH, MM, SS]
-                    dateLabel = `${dateParts[2]}.${dateParts[1]}. ${timeParts[0]}:${timeParts[1]}`;
-                } catch(e) {}
-
-                storageChart.data.labels.push(dateLabel);
-                storageChart.data.datasets[0].data.push(chartVal);
-                storageChart.data.datasets[0].backgroundColor.push(colorTransparent); 
-                storageChart.data.datasets[0].borderColor.push(color);            
+                const datePart = entry.timestamp.split(' ')[0].split('-').slice(1).join('.'); 
+                storageChart.data.labels.push(datePart);
+                storageChart.data.datasets[0].data.push(parseFloat(displayValNumeric));
             });
             
             const totalFmt = formatSize(totalBytes).split(' ');
@@ -1874,159 +1550,17 @@ HTML_TEMPLATE = """
             } else addLog("Löschen fehlgeschlagen.", "error");
         }
 
-        let currentModalFilename = "";
-
         function showDetails(idx) {
             const entry = globalHistory[idx];
-            currentModalFilename = entry.filename;
-            
-            // Basic Meta
             document.getElementById('modal-filename').innerText = entry.filename;
             document.getElementById('modal-hash').innerText = entry.sha256;
             document.getElementById('modal-ts').innerText = entry.timestamp;
             document.getElementById('modal-size').innerText = formatSize(entry.size);
-            
-            // Comment
-            document.getElementById('modal-comment').value = entry.comment || "";
-            
-            // Lock Status UI
-            updateLockUI(entry.locked || false);
-            
-            // Integrity Reset
-            document.getElementById('integrity-result').classList.add('hidden');
-            
-            // Actions
             document.getElementById('modal-delete-btn').onclick = () => { closeHashModal(); deleteBackupApi(entry.filename); };
-            
-            // Reset Tabs
-            switchModalTab('meta');
-            document.getElementById('zip-file-list').innerHTML = '<div class="p-8 text-center text-slate-500 text-xs uppercase tracking-widest animate-pulse">Lade Dateistruktur...</div>';
-            document.getElementById('file-count-badge').innerText = "-- Files";
-            
-            // Show Modal
-            const modal = document.getElementById('hash-modal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
+            document.getElementById('hash-modal').classList.add('flex');
         }
 
-        function closeHashModal() { 
-            const modal = document.getElementById('hash-modal');
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-        }
-        
-        function switchModalTab(tab) {
-            document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.modal-tab-content').forEach(c => c.classList.add('hidden'));
-            
-            if(tab === 'meta') {
-                document.querySelector('.modal-tab:nth-child(1)').classList.add('active');
-                document.getElementById('tab-meta').classList.remove('hidden');
-            } else {
-                document.querySelector('.modal-tab:nth-child(2)').classList.add('active');
-                document.getElementById('tab-content').classList.remove('hidden');
-                loadZipContent();
-            }
-        }
-        
-        async function loadZipContent() {
-            if(!currentModalFilename) return;
-            // Nur laden wenn noch nicht geladen? Nein, immer laden um aktuell zu sein (obwohl Zip sich nicht ändert)
-            // Cache könnte man machen, aber wir lassen es simpel.
-            
-            const listContainer = document.getElementById('zip-file-list');
-            try {
-                const resp = await fetch('/api/get_zip_content', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({filename: currentModalFilename}) });
-                const data = await resp.json();
-                
-                document.getElementById('file-count-badge').innerText = data.files.length + " Files";
-                
-                let html = '';
-                data.files.forEach(f => {
-                    html += `<div class="file-list-item"><span class="file-icon">📄</span> ${f}</div>`;
-                });
-                listContainer.innerHTML = html;
-            } catch(e) {
-                listContainer.innerHTML = '<div class="p-4 text-red-500 text-xs">Fehler beim Laden der Dateiliste.</div>';
-            }
-        }
-        
-        async function toggleLock() {
-            if(!currentModalFilename) return;
-            try {
-                const resp = await fetch('/api/toggle_lock', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({filename: currentModalFilename}) });
-                const data = await resp.json();
-                if(data.status === 'success') {
-                    // Update Global History locally
-                    const entry = globalHistory.find(h => h.filename === currentModalFilename);
-                    if(entry) entry.locked = data.locked;
-                    
-                    updateLockUI(data.locked);
-                    updateDashboardDisplays(); // Refresh Table Icons
-                    addLog(data.locked ? "Backup locked." : "Backup unlocked.", "info");
-                }
-            } catch(e) { console.error(e); }
-        }
-        
-        function updateLockUI(isLocked) {
-            const badge = document.getElementById('lock-badge');
-            const btn = document.getElementById('btn-lock');
-            
-            if(isLocked) {
-                badge.classList.remove('hidden');
-                btn.innerHTML = '🔒';
-                btn.classList.add('bg-amber-500/20');
-                btn.title = "Unlock";
-            } else {
-                badge.classList.add('hidden');
-                btn.innerHTML = '🔓';
-                btn.classList.remove('bg-amber-500/20');
-                btn.title = "Lock (Vor Löschung schützen)";
-            }
-        }
-        
-        async function saveComment() {
-            const comment = document.getElementById('modal-comment').value;
-            if(!currentModalFilename) return;
-            try {
-                const resp = await fetch('/api/update_comment', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({filename: currentModalFilename, comment}) });
-                const data = await resp.json();
-                if(data.status === 'success') {
-                    const entry = globalHistory.find(h => h.filename === currentModalFilename);
-                    if(entry) entry.comment = comment;
-                    addLog("Kommentar gespeichert.", "success");
-                }
-            } catch(e) { addLog("Fehler beim Speichern.", "error"); }
-        }
-        
-        async function verifyIntegrity() {
-            const resDiv = document.getElementById('integrity-result');
-            resDiv.classList.remove('hidden');
-            // Reset & Loading Style
-            resDiv.className = 'mb-4 p-3 rounded-lg text-center font-bold text-xs tracking-wide border bg-blue-500/10 border-blue-500/20 text-blue-400 animate-pulse';
-            resDiv.innerHTML = '⚡ BERECHNE HASH & VERGLEICHE... BITTE WARTEN...';
-            
-            try {
-                const resp = await fetch('/api/verify_integrity', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({filename: currentModalFilename}) });
-                const data = await resp.json();
-                
-                resDiv.classList.remove('animate-pulse');
-
-                if(data.status === 'success') {
-                    resDiv.className = 'mb-4 p-3 rounded-lg text-center font-bold text-xs tracking-wide border bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]';
-                    resDiv.innerHTML = `✓ ${data.message}`;
-                } else if(data.status === 'mismatch') {
-                    resDiv.className = 'mb-4 p-3 rounded-lg text-center font-bold text-xs tracking-wide border bg-red-500/10 border-red-500/20 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]';
-                    resDiv.innerHTML = `⚠️ ${data.message}`;
-                } else {
-                    resDiv.className = 'mb-4 p-3 rounded-lg text-center font-bold text-xs tracking-wide border bg-red-900/10 border-red-500/20 text-red-400';
-                    resDiv.innerHTML = `Fehler: ${data.message}`;
-                }
-            } catch(e) {
-                resDiv.className = 'mb-4 p-3 rounded-lg text-center font-bold text-xs tracking-wide border bg-red-900/10 border-red-500/20 text-red-400';
-                resDiv.innerHTML = `Systemfehler.`;
-            }
-        }
+        function closeHashModal() { document.getElementById('hash-modal').classList.remove('flex'); }
         async function pickFolder(id) {
             const resp = await fetch('/api/pick_folder');
             const data = await resp.json();
@@ -2117,16 +1651,6 @@ HTML_TEMPLATE = """
 
 # --- Flask API Endpunkte ---
 
-@app.route("/favicon.ico")
-def favicon():
-    """Serviert ein benutzerdefiniertes Icon (logo.ico/png) oder redirectet zum GitHub Logo."""
-    possible_icons = ["logo.ico", "logo.png", "favicon.ico"]
-    for icon in possible_icons:
-        if os.path.exists(icon):
-            return send_file(icon)
-    
-    return redirect("https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.ico?raw=true")
-
 @app.route("/")
 def index():
     return render_template_string(HTML_TEMPLATE)
@@ -2190,124 +1714,10 @@ def save_config_api():
         return jsonify({"status": "success"})
     return jsonify({"status": "error"})
 
-@app.route("/api/toggle_lock", methods=["POST"])
-def toggle_lock():
-    try:
-        data = request.json
-        filename = data.get("filename")
-        history = load_history()
-        found = False
-        new_state = False
-        
-        for entry in history:
-            if entry['filename'] == filename:
-                entry['locked'] = not entry.get('locked', False)
-                new_state = entry['locked']
-                found = True
-                break
-        
-        if found and safe_write_json(HISTORY_FILE, history):
-            return jsonify({"status": "success", "locked": new_state})
-        return jsonify({"status": "error", "message": "Eintrag nicht gefunden"})
-    except Exception as e:
-        logger.error(f"Lock Error: {e}")
-        return jsonify({"status": "error", "message": str(e)})
-
-@app.route("/api/update_comment", methods=["POST"])
-def update_comment():
-    try:
-        data = request.json
-        filename = data.get("filename")
-        comment = data.get("comment", "")
-        history = load_history()
-        
-        for entry in history:
-            if entry['filename'] == filename:
-                entry['comment'] = comment
-                safe_write_json(HISTORY_FILE, history)
-                return jsonify({"status": "success"})
-                
-        return jsonify({"status": "error", "message": "Eintrag nicht gefunden"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
-
-@app.route("/api/get_zip_content", methods=["POST"])
-def get_zip_content():
-    try:
-        filename = request.json.get("filename")
-        config = load_config()
-        dest_path = config.get("default_dest")
-        if not dest_path: return jsonify({"files": []})
-        
-        full_path = os.path.join(dest_path, filename)
-        if not os.path.exists(full_path): return jsonify({"files": []})
-        
-        file_list = []
-        # Lazy Load pyzipper falls nötig (verschlüsselt) oder standard zipfile
-        # Wir versuchen erst Standard Zipfile für Speed
-        try:
-            with zipfile.ZipFile(full_path, 'r') as z:
-                # Limit auf 1000 Dateien für Performance
-                file_list = z.namelist()[:1000] 
-                if len(z.namelist()) > 1000:
-                    file_list.append(f"... und {len(z.namelist()) - 1000} weitere")
-        except RuntimeError: # Passwort geschützt?
-             # Wenn Encrypted Header, brauchen wir pyzipper aber wir haben kein PW hier
-             # Für reines Listing ohne Decrypt kann zipfile manchmal funktionieren, aber oft nicht bei AES
-             # Wir geben einen Hinweis zurück
-             return jsonify({"files": ["(Verschlüsseltes Archiv - Inhalt verborgen)"]})
-        except Exception as e:
-             return jsonify({"files": [f"Fehler beim Lesen: {str(e)}"]})
-             
-        return jsonify({"files": file_list})
-    except Exception as e:
-        logger.error(f"Content Error: {e}")
-        return jsonify({"files": []})
-
-@app.route("/api/verify_integrity", methods=["POST"])
-def verify_integrity():
-    try:
-        filename = request.json.get("filename")
-        config = load_config()
-        dest_path = config.get("default_dest")
-        full_path = os.path.join(dest_path, filename)
-        
-        history = load_history()
-        entry = next((h for h in history if h['filename'] == filename), None)
-        
-        if not entry: return jsonify({"status": "error", "message": "Historie Eintrag fehlt"})
-        
-        stored_hash = entry.get('sha256')
-        
-        # Recalculate (das kann dauern, eigentlich async job, aber für Einzeldatei ok)
-        # Wir nutzen calculate_sha256 ohne Salt für reinen File-Hash?
-        # Warte, calculate_sha256 im Code oben nutzt Salt wenn übergeben.
-        # Beim Erstellen wurde `salt=ts` übergeben!
-        # Das ist problematisch für Re-Verification, weil wir den Salt brauchen.
-        # Der Salt war `ts = now.strftime("%Y-%m-%d %H:%M:%S")`.
-        # Dieser Timestamp steht im History Entry.
-        
-        # Check `run_backup_logic`:
-        # sha = calculate_sha256(zip_path, salt=ts)
-        # entry["timestamp"] = ts (exakt dieser String)
-        
-        salt = entry['timestamp']
-        current_hash = calculate_sha256(full_path, salt=salt)
-        
-        if current_hash == stored_hash:
-             return jsonify({"status": "success", "message": "Integrität bestätigt (Bit-Perfect)."})
-        else:
-             return jsonify({"status": "mismatch", "message": "WARNUNG: Hash-Abweichung erkannt!"})
-             
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
-
 @app.route("/api/pick_files")
 def pick_files():
     """Öffnet den Multi-Datei-Dialog (Windows native)."""
     try:
-        import tkinter as tk # Lazy Load
-        from tkinter import filedialog # Lazy Load
         root = tk.Tk()
         root.withdraw()
         root.attributes('-topmost', True)
@@ -2326,8 +1736,6 @@ def pick_files():
 def pick_file():
     """Öffnet den Datei-Dialog (Windows native)."""
     try:
-        import tkinter as tk # Lazy Load
-        from tkinter import filedialog # Lazy Load
         root = tk.Tk()
         root.withdraw()
         root.attributes('-topmost', True)
@@ -2342,8 +1750,6 @@ def pick_file():
 def pick_folder():
     """Öffnet den Ordner-Dialog (Windows native)."""
     try:
-        import tkinter as tk # Lazy Load
-        from tkinter import filedialog # Lazy Load
         root = tk.Tk()
         root.withdraw()
         root.attributes('-topmost', True)
@@ -2417,29 +1823,55 @@ def get_backup_status():
 
 @app.route("/api/restore_backup", methods=["POST"])
 def restore_backup():
-    """Rekonstruiert Daten aus einem ZIP-Archiv."""
+    """Rekonstruiert Daten aus einem ZIP-Archiv, unterstützt AES."""
     data = request.json
     filename, dest, target = data.get("filename"), data.get("dest"), data.get("target")
     
+    config = load_config()
+    enc_password = config.get("encryption_password", "")
+
+    if not target:
+        return jsonify({"status": "error", "message": "Kein Zielpfad für Restore definiert."})
+
     # Intelligente Zielpfad-Korrektur für Einzeldatei/Multi-File Szenarien
-    if target:
-        # Wenn Pipe enthalten oder Pfad eine Datei ist -> Nimm das Elternverzeichnis
-        if "|" in target or (os.path.exists(target) and os.path.isfile(target)):
-            first_path = target.split("|")[0].strip()
-            # Wenn der Pfad existiert (Datei), nimm dirname. Wenn nicht, rate dirname.
-            if os.path.exists(first_path) and os.path.isfile(first_path):
-                target = os.path.dirname(first_path)
-            elif not os.path.exists(first_path):
-                # Versuche Pfadstruktur zu erhalten
-                target = os.path.dirname(first_path)
+    if "|" in target or (os.path.exists(target) and os.path.isfile(target)):
+        first_path = target.split("|")[0].strip()
+        if os.path.exists(first_path) and os.path.isfile(first_path):
+            target = os.path.dirname(first_path)
+        elif not os.path.exists(first_path):
+            target = os.path.dirname(first_path)
 
     try:
         archive_full_path = os.path.join(dest, filename)
         if not os.path.exists(archive_full_path):
             return jsonify({"status": "error", "message": "Archiv nicht gefunden."})
             
-        with zipfile.ZipFile(archive_full_path, 'r') as z:
-            z.extractall(target)
+        # Versuche mit pyzipper zu öffnen (kompatibel mit Standard ZIP und AES)
+        try:
+            with pyzipper.AESZipFile(archive_full_path, 'r') as z:
+                # Check ob verschlüsselt
+                is_encrypted = False
+                for info in z.infolist():
+                    if info.flag_bits & 0x1:
+                        is_encrypted = True
+                        break
+                
+                if is_encrypted:
+                    if not enc_password:
+                        return jsonify({"status": "error", "message": "Backup ist verschlüsselt, aber kein Passwort in Konfig."})
+                    z.setpassword(enc_password.encode('utf-8'))
+                
+                z.extractall(target)
+        except RuntimeError as re:
+            if 'Bad password' in str(re):
+                return jsonify({"status": "error", "message": "Falsches Entschlüsselungs-Passwort."})
+            raise re
+        except Exception as zip_err:
+             # Fallback auf Standard zipfile falls pyzipper Probleme macht (selten)
+             logger.warning(f"Pyzipper Fehler, versuche Standard-Lib: {zip_err}")
+             with zipfile.ZipFile(archive_full_path, 'r') as z:
+                z.extractall(target)
+
         return jsonify({"status": "success"})
     except Exception as e: 
         logger.error(f"Restore Fehler: {e}")
@@ -2516,8 +1948,6 @@ if __name__ == "__main__":
             
         # User fragen
         try:
-            import tkinter as tk # Lazy Load
-            from tkinter import messagebox # Lazy Load
             root = tk.Tk()
             root.withdraw() # Hauptfenster verstecken
             root.attributes("-topmost", True) # In den Vordergrund
