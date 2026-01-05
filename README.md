@@ -10,7 +10,19 @@ Es wurde entwickelt, um Projekte und wichtige Verzeichnisse nicht nur zu archivi
 
 ---
 
-## **✨ NEUE FEATURES (v7.2 Update)**
+## **✨ NEUE FEATURES (v7.3 Hybrid Kernel)**
+
+### 🕵️ **Snapshot Inspektor 2.0**
+- **Deep Scan Engine:** Überprüfen Sie die Bit-Integrität Ihrer Archive nachträglich per Hash-Vergleich.
+- **Content Preview:** Sehen Sie den Inhalt von ZIP-Dateien direkt im Browser, ohne sie wiederherstellen zu müssen.
+- **Retention Lock:** Sperren Sie wichtige Backups ("Lock"), damit sie niemals automatisch durch die Rotation gelöscht werden.
+- **Metadaten-Editor:** Fügen Sie Kommentare zu alten Backups hinzu oder bearbeiten Sie diese.
+
+### 🚀 **Performance & UX**
+- **Smart Scaling:** Intelligente Anzeige von Dateigrößen (automatische Umschaltung KB/MB/GB).
+- **Lazy Loading Core:** Startet bis zu 40% schneller durch bedarfsgerechtes Laden von Bibliotheken.
+
+## **✨ FEATURES (v7.2 Update)**
 
 ### 🛑 **Smart Cancel & Safety**
 - **Abbruch-Button:** Laufende Backups können jetzt jederzeit sicher abgebrochen werden.
