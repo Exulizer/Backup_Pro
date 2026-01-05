@@ -276,7 +276,10 @@ if %errorlevel% neq 0 pause
             shortcut = shell.CreateShortCut(path)
             shortcut.TargetPath = target
             shortcut.WorkingDirectory = os.getcwd()
-            shortcut.IconLocation = sys.executable
+            if os.path.exists("logo.ico"):
+                shortcut.IconLocation = os.path.abspath("logo.ico")
+            else:
+                shortcut.IconLocation = sys.executable
             shortcut.save()
             return True
         except Exception as e:
@@ -292,16 +295,11 @@ if %errorlevel% neq 0 pause
             
             vbs_content = f"""
 Set oWS = WScript.CreateObject("WScript.Shell")
-Set FSO = CreateObject("Scripting.FileSystemObject")
 sLinkFile = oWS.SpecialFolders("Desktop") & "\\{APP_NAME}.lnk"
 Set oLink = oWS.CreateShortcut(sLinkFile)
 oLink.TargetPath = "{target}"
 oLink.WorkingDirectory = "{os.getcwd()}"
-if FSO.FileExists("{os.path.join(os.getcwd(), 'logo.ico')}") then
-    oLink.IconLocation = "{os.path.join(os.getcwd(), 'logo.ico')}"
-else
-    oLink.IconLocation = "{sys.executable}"
-end if
+oLink.IconLocation = "{os.path.abspath('logo.ico') if os.path.exists('logo.ico') else sys.executable}"
 oLink.Save
 """
             with open(vbs_script, "w") as f:
@@ -388,9 +386,10 @@ oLink.Save
             # Fallbacks immer hinzufügen als Backup
             base_url = "https://raw.githubusercontent.com/Exulizer/Backup_Pro"
             fallback_candidates = [
-                (f"{base_url}/main/versions/backup_app_v7_3.py", "backup_app_v7_3.py"), # Aktuelle Version
+                (f"{base_url}/main/versions/backup_app_v7_3.py", "backup_app_v7_3.py"), # Aktuelle Version im versions Ordner
                 (f"{base_url}/main/versions/backup_app_v7_2.py", "backup_app_v7_2.py"),
                 (f"{base_url}/main/versions/backup_app_v7_1.py", "backup_app_v7_1.py"),
+                (f"{base_url}/main/backup_app_v7_1.py", "backup_app_v7_1.py"), # Root Fallback
             ]
             
             for fb in fallback_candidates:
@@ -441,19 +440,6 @@ oLink.Save
                 self.root.after(0, lambda: messagebox.showinfo("Download", f"Die App ({downloaded_file}) wurde erfolgreich heruntergeladen!"))
                 # Aktualisiere app_script Variable falls sich der Name geändert hat
                 self.app_script = downloaded_file
-
-                # Logo Download Versuch
-                try:
-                    logo_url = "https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.ico?raw=true"
-                    self.root.after(0, lambda: self.log("Lade Logo herunter...", "info"))
-                    with urllib.request.urlopen(logo_url, context=ctx) as response:
-                        if response.getcode() == 200:
-                            with open("logo.ico", "wb") as f:
-                                f.write(response.read())
-                            self.root.after(0, lambda: self.log("Logo erfolgreich geladen.", "success"))
-                except Exception as e:
-                    self.root.after(0, lambda err=e: self.log(f"Logo Download übersprungen: {err}", "warn"))
-
             else:
                 self.root.after(0, lambda: self.log(f"Download fehlgeschlagen.", "error"))
                 self.root.after(0, lambda: messagebox.showerror("Fehler", f"Konnte keine gültige App-Datei finden.\nLetzter Fehler: {last_error}"))
@@ -462,6 +448,22 @@ oLink.Save
             self.root.after(0, self.progress.stop)
                 
         threading.Thread(target=_download, daemon=True).start()
+
+    def download_logo(self):
+        try:
+            url = "https://raw.githubusercontent.com/Exulizer/Backup_Pro/main/logo.ico"
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            
+            req = urllib.request.Request(url, headers={'User-Agent': 'BackupPro-Installer'})
+            with urllib.request.urlopen(req, context=ctx) as response:
+                if response.getcode() == 200:
+                    with open("logo.ico", "wb") as f:
+                        f.write(response.read())
+                    self.log("Logo heruntergeladen.", "success")
+        except Exception:
+            pass 
 
     def start_installation(self):
         self.btn_install.config(state="disabled", bg="#333333")
@@ -514,6 +516,7 @@ oLink.Save
             self.log("start_backup_pro.bat erstellt.", "success")
         
         # 4. Shortcut
+        self.download_logo()
         self.log("Erstelle Desktop-Verknüpfung...", "info")
         self.root.after(0, lambda: self.progress.configure(value=100))
         if self.create_shortcut():
