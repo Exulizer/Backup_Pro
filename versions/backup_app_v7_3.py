@@ -16,7 +16,7 @@ import socket
 import sys
 from datetime import datetime
 from collections import defaultdict
-from flask import Flask, render_template_string, jsonify, request
+from flask import Flask, render_template_string, jsonify, request, send_file, Response, redirect
 # import tkinter as tk -> Lazy Loaded
 # from tkinter import filedialog, messagebox -> Lazy Loaded
 
@@ -55,6 +55,17 @@ CONFIG_FILE = os.path.join(BASE_DIR, "backup_config.json")
 def ensure_files_exist():
     """Initialisierung der Systemdateien beim ersten Start mit Fehlerprüfung."""
     try:
+        # Logo Check & Download
+        logo_path = os.path.join(BASE_DIR, "logo.ico")
+        if not os.path.exists(logo_path):
+            try:
+                import urllib.request
+                url = "https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.ico?raw=true"
+                logger.info("Lade Logo herunter...")
+                urllib.request.urlretrieve(url, logo_path)
+            except Exception as e:
+                logger.warning(f"Konnte Logo nicht laden: {e}")
+
         if not os.path.exists(HISTORY_FILE):
             with open(HISTORY_FILE, "w", encoding="utf-8") as f:
                 json.dump([], f)
@@ -597,8 +608,8 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Backup OS Pro Commander v7.2 - Hybrid Kernel Edition</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
+    <title>Backup OS Pro Commander v7.3 - Hybrid Kernel Edition</title>
+    <link rel="icon" href="https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.ico?raw=true">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -751,7 +762,7 @@ HTML_TEMPLATE = """
     <!-- Startup Loader -->
     <div id="startup-loader">
         <div class="loader-content">
-            <div class="loader-logo">🛡️</div>
+            <img src="https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.ico?raw=true" class="w-24 h-24 mx-auto mb-4 animate-pulse" alt="Backup OS">
             <div class="text-xl font-black text-white tracking-[0.3em] uppercase mb-1">BACKUP<span class="text-blue-500">OS</span></div>
             <div class="text-[9px] text-slate-500 uppercase tracking-widest mb-6">Hybrid Kernel v7.3</div>
             
@@ -772,7 +783,7 @@ HTML_TEMPLATE = """
             <button onclick="closeHashModal()" class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors z-10">✕</button>
             
             <div class="flex items-center gap-3 mb-2">
-                <div class="p-2 bg-blue-500/20 rounded text-blue-400">🛡️</div>
+                <img src="https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.ico?raw=true" class="w-10 h-10 rounded bg-blue-500/20 p-1" alt="Logo">
                 <h3 class="text-lg font-black uppercase tracking-widest text-white">Snapshot Inspektor</h3>
                 <div id="lock-badge" class="hidden bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
                     <span>🔒</span> RETENTION LOCK
@@ -853,7 +864,7 @@ HTML_TEMPLATE = """
     <!-- Sidebar -->
     <aside class="w-64 bg-[#0d0f16] border-r border-[#1a1e2a] flex flex-col z-50">
         <div class="p-6 border-b border-[#1a1e2a] flex items-center gap-3">
-            <div class="p-2 bg-[#0084ff] rounded-lg shadow-lg">🛡️</div>
+            <img src="https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.ico?raw=true" class="w-10 h-10 rounded-lg shadow-lg bg-[#0084ff] p-1" alt="Logo">
             <div class="flex flex-col">
                 <span class="font-black text-white leading-none">BACKUP OS</span>
                 <span class="text-[10px] text-[#0084ff] font-bold tracking-widest uppercase">Commander Pro</span>
@@ -2105,6 +2116,16 @@ HTML_TEMPLATE = """
 """
 
 # --- Flask API Endpunkte ---
+
+@app.route("/favicon.ico")
+def favicon():
+    """Serviert ein benutzerdefiniertes Icon (logo.ico/png) oder redirectet zum GitHub Logo."""
+    possible_icons = ["logo.ico", "logo.png", "favicon.ico"]
+    for icon in possible_icons:
+        if os.path.exists(icon):
+            return send_file(icon)
+    
+    return redirect("https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.ico?raw=true")
 
 @app.route("/")
 def index():
