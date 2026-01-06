@@ -597,7 +597,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Backup OS Pro Commander v7.3 - Hybrid Kernel Edition</title>
+    <title>Backup OS Pro Commander v7.3.1 - Hybrid Kernel Edition</title>
     <link rel="icon" href="/favicon.ico">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -1415,7 +1415,7 @@ HTML_TEMPLATE = """
                 // Unter 10 MB -> Anzeige in MB oder KB
                 if (bytes < 0.01 * G) { 
                     if (bytes < 0.1 * M) { // Unter 100 KB -> Anzeige in KB
-                        return (bytes / K).toFixed(1).replace('.', ',') + " KB";
+                        return (bytes / K).toFixed(2).replace('.', ',') + " KB";
                     }
                     return (bytes / M).toFixed(2).replace('.', ',') + " MB";
                 }
@@ -1425,7 +1425,7 @@ HTML_TEMPLATE = """
             // Wenn MB als Basis gewählt ist
             if (globalUnit === 'MB') {
                  if (bytes < 0.1 * M) { // Unter 100 KB -> Anzeige in KB
-                    return (bytes / K).toFixed(1).replace('.', ',') + " KB";
+                    return (bytes / K).toFixed(2).replace('.', ',') + " KB";
                 }
                 return (bytes / M).toFixed(2).replace('.', ',') + " MB";
             }
@@ -1514,7 +1514,9 @@ HTML_TEMPLATE = """
                             bodyFont: { family: 'JetBrains Mono' },
                             callbacks: {
                                 label: function(context) {
-                                    return "Größe: " + context.parsed.y + " " + globalUnit;
+                                    let val = context.parsed.y;
+                                    if (val === undefined || val === null) val = context.raw;
+                                    return "Größe: " + Number(val).toFixed(2).replace('.', ',') + " " + globalUnit;
                                 }
                             }
                         }
@@ -1526,7 +1528,13 @@ HTML_TEMPLATE = """
                         }, 
                         y: { 
                             grid: { color: 'rgba(255,255,255,0.05)' }, 
-                            ticks: { color: '#475569', font: { size: 9 }, callback: function(value) { return value + ' ' + globalUnit; } } 
+                            ticks: { 
+                                color: '#475569', 
+                                font: { size: 9 }, 
+                                callback: function(value) { 
+                                    return Number(value).toFixed(2).replace('.', ',') + ' ' + globalUnit; 
+                                } 
+                            } 
                         } 
                     } 
                 }
