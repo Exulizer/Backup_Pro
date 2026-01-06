@@ -17,6 +17,8 @@ Es wurde entwickelt, um Projekte und wichtige Verzeichnisse nicht nur zu archivi
 - **Content Preview:** Sehen Sie den Inhalt von ZIP-Dateien direkt im Browser, ohne sie wiederherstellen zu müssen.
 - **Retention Lock:** Sperren Sie wichtige Backups ("Lock"), damit sie niemals automatisch durch die Rotation gelöscht werden.
 - **Metadaten-Editor:** Fügen Sie Kommentare zu alten Backups hinzu oder bearbeiten Sie diese.
+- **Smart Sorting:** Sortieren Sie Snapshots chronologisch oder nach Größe (aufsteigend/absteigend).
+- **History Cleanup:** Entfernen Sie alte Einträge aus der Liste, während die physischen Dateien sicher erhalten bleiben.
 
 ### 🚀 **Performance & UX**
 - **Smart Scaling:** Intelligente Anzeige von Dateigrößen (automatische Umschaltung KB/MB/GB).
