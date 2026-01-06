@@ -959,6 +959,10 @@ HTML_TEMPLATE = """
                         <span class="text-3xl font-black text-white" id="total-val-display">0.00</span>
                         <span class="text-[12px] font-bold text-slate-600" id="total-unit-display">MB</span>
                     </div>
+                    <div class="flex justify-between items-center mt-3 pt-3 border-t border-white/5">
+                        <span class="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Snapshots</span>
+                        <span id="total-snapshots-display" class="text-[10px] font-mono text-blue-400">0</span>
+                    </div>
                 </div>
 
                 <div class="commander-module p-5">
@@ -966,6 +970,10 @@ HTML_TEMPLATE = """
                     <div class="flex items-baseline gap-2 mt-4">
                         <span id="delta-val" class="text-3xl font-black text-white">0</span>
                         <span id="delta-badge" class="delta-badge delta-neutral">Neutral</span>
+                    </div>
+                    <div class="flex justify-between items-center mt-3 pt-3 border-t border-white/5">
+                        <span class="text-[9px] uppercase text-slate-500 font-bold tracking-wider">File Count</span>
+                        <span id="delta-details" class="text-[10px] font-mono text-slate-400">-- / --</span>
                     </div>
                 </div>
 
@@ -1774,6 +1782,7 @@ HTML_TEMPLATE = """
             const totalFmt = formatSize(totalBytes).split(' ');
             if(document.getElementById('total-val-display')) document.getElementById('total-val-display').innerText = totalFmt[0];
             if(document.getElementById('total-unit-display')) document.getElementById('total-unit-display').innerText = totalFmt[1];
+            if(document.getElementById('total-snapshots-display')) document.getElementById('total-snapshots-display').innerText = globalHistory.length + " Snapshots";
 
             storageChart.data.datasets[0].label = `Größe (${globalUnit})`;
             storageChart.update();
@@ -1790,6 +1799,7 @@ HTML_TEMPLATE = """
                         // Delta Calculation
                         const deltaVal = document.getElementById('delta-val');
                         const deltaBadge = document.getElementById('delta-badge');
+                        const deltaDetails = document.getElementById('delta-details');
                         
                         if(deltaVal && deltaBadge && globalHistory.length > 0) {
                             // Sortierung sicherstellen: Wir nehmen an, globalHistory ist chronologisch (letzter Eintrag = aktuellstes Backup)
@@ -1805,6 +1815,7 @@ HTML_TEMPLATE = """
                             const delta = currentCount - lastCount;
                             
                             deltaVal.innerText = (delta > 0 ? "+" : "") + delta;
+                            if(deltaDetails) deltaDetails.innerText = `${currentCount} (Aktuell) / ${lastCount} (Backup)`;
                             
                             if(delta === 0) {
                                 deltaBadge.className = "delta-badge delta-neutral";
@@ -1819,6 +1830,7 @@ HTML_TEMPLATE = """
                         } else if (deltaVal && deltaBadge) {
                             // Kein Backup vorhanden -> Delta ist quasi alles
                             deltaVal.innerText = "+" + (sData.count || 0);
+                            if(deltaDetails) deltaDetails.innerText = `${sData.count || 0} (Initial)`;
                             deltaBadge.className = "delta-badge delta-plus";
                             deltaBadge.innerText = "Initial";
                         }
