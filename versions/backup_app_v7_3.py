@@ -1034,11 +1034,11 @@ HTML_TEMPLATE = """
                 <h2 class="text-[12px] text-slate-500 uppercase font-bold mb-6 tracking-widest">Snapshot Historie</h2>
                 
                 <div class="flex gap-2 mb-4">
-                    <button onclick="clearHistory()" class="text-[10px] font-black uppercase bg-red-500/10 border border-red-500/20 px-3 py-1 rounded text-red-400 hover:bg-red-500/20 transition-all tracking-widest">
+                    <button onclick="window.clearHistory()" class="text-[10px] font-black uppercase bg-red-500/10 border border-red-500/20 px-3 py-1 rounded text-red-400 hover:bg-red-500/20 transition-all tracking-widest">
                         Historie leeren
                     </button>
-                    <button onclick="toggleSort()" class="text-[10px] font-black uppercase bg-blue-500/10 border border-blue-500/20 px-3 py-1 rounded text-blue-400 hover:bg-blue-500/20 transition-all tracking-widest">
-                        Sortieren
+                    <button onclick="window.toggleSort()" id="btn-sort" class="text-[10px] font-black uppercase bg-blue-500/10 border border-blue-500/20 px-3 py-1 rounded text-blue-400 hover:bg-blue-500/20 transition-all tracking-widest min-w-[140px]">
+                        Sort: Datum (Neu)
                     </button>
                 </div>
 
@@ -1290,6 +1290,10 @@ HTML_TEMPLATE = """
                         <h3 class="text-lg font-bold text-white mb-3 group-hover:text-blue-400 transition-colors"><span class="text-blue-500/50 mr-2">08</span> Deep Scan (Integrität)</h3>
                         <p class="text-sm text-slate-400 leading-relaxed">Im Inspektor finden Sie den Button <strong class="text-emerald-400">INTEGRITÄT PRÜFEN</strong>. Das ist ein Gesundheitscheck: Das Programm berechnet den digitalen Fingerabdruck (Hash) neu und vergleicht ihn. So erkennen Sie sofort, ob Dateien auf der Festplatte beschädigt wurden (Bit Rot).</p>
                     </div>
+                    <div class="handbook-item p-6 bg-[#0f111a] rounded-xl border border-white/5 hover:border-blue-500/30 transition-all group">
+                        <h3 class="text-lg font-bold text-white mb-3 group-hover:text-blue-400 transition-colors"><span class="text-blue-500/50 mr-2">09</span> Historie & Sortierung</h3>
+                        <p class="text-sm text-slate-400 leading-relaxed">Nutzen Sie den Button <strong class="text-blue-400">Sort: Datum (Neu)</strong>, um Ihre Backups chronologisch oder nach Größe zu ordnen. Mit <strong class="text-red-400">Historie leeren</strong> bereinigen Sie die Liste – Ihre gespeicherten ZIP-Dateien bleiben dabei sicher erhalten.</p>
+                    </div>
                 </div>
 
                 <!-- Profi Tipps -->
@@ -1315,8 +1319,8 @@ HTML_TEMPLATE = """
                                 <span>☕</span> Support Development
                             </h4>
                             <p class="text-sm text-slate-300 leading-relaxed">
-                                Gefällt Ihnen <strong>Backup OS Pro</strong>? Unterstützen Sie die Weiterentwicklung mit einem Kaffee! 
-                                <span class="text-slate-500 block text-xs mt-1">Ihr Support fließt direkt in neue Features und Updates.</span>
+                                Gefällt Ihnen <strong>Backup OS Pro</strong>? Helfen Sie mit, die Entwicklung voranzutreiben! 
+                                <span class="text-slate-500 block text-xs mt-1">Jede Unterstützung fließt direkt in neue Features und Updates.</span>
                             </p>
                         </div>
                         <a href="https://buymeacoffee.com/exulizer" target="_blank" class="group relative shrink-0">
@@ -1364,7 +1368,45 @@ HTML_TEMPLATE = """
         let currentLimit = 10;
         let cloudEnabled = false;
         let autoBackupEnabled = false;
+        console.log("BACKUP PRO SCRIPT INITIALIZING...");
         let globalUnit = 'MB';
+
+        // --- Sorting & History Logic (Global) ---
+        let currentSortMode = 0; // 0=DateDesc, 1=DateAsc, 2=SizeDesc, 3=SizeAsc
+        const sortLabels = ["Datum (Neu)", "Datum (Alt)", "Größe (Max)", "Größe (Min)"];
+
+        window.toggleSort = function() {
+            currentSortMode = (currentSortMode + 1) % 4;
+            const btn = document.getElementById('btn-sort');
+            if(btn) btn.innerText = "Sort: " + sortLabels[currentSortMode];
+
+            if(currentSortMode === 0) {
+                globalHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            } else if(currentSortMode === 1) {
+                globalHistory.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            } else if(currentSortMode === 2) {
+                globalHistory.sort((a, b) => b.size - a.size);
+            } else if(currentSortMode === 3) {
+                globalHistory.sort((a, b) => a.size - b.size);
+            }
+            updateDashboardDisplays();
+        };
+
+        window.clearHistory = async function() {
+            if(!confirm("Historie wirklich leeren? (Dateien bleiben erhalten)")) return;
+            try {
+                const resp = await fetch('/api/clear_history', { method: 'POST' });
+                const data = await resp.json();
+                if(data.status === 'success') {
+                    addLog("Historie geleert.", "success");
+                    loadData();
+                } else {
+                    addLog("Fehler: " + data.message, "error");
+                }
+            } catch(e) {
+                addLog("Verbindungsfehler.", "error");
+            }
+        };
 
         function updateAutoToggleUI() {
             const knob = document.getElementById('auto-toggle-knob');
