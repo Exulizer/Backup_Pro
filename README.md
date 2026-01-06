@@ -112,3 +112,13 @@ Das Dashboard öffnet sich automatisch in Ihrem Standard-Browser (meist unter **
 ---
 
 Copyright &copy; 2025 Exulizer
+
+---
+
+## ☕ Support the Project
+
+Gefällt Ihnen **Backup OS Pro**? Helfen Sie mit, die Entwicklung voranzutreiben! Jede Unterstützung fließt direkt in neue Features und Updates.
+
+<a href="https://buymeacoffee.com/exulizer" target="_blank">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" >
+</a>
