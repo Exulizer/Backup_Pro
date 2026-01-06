@@ -21,6 +21,7 @@ Es wurde entwickelt, um Projekte und wichtige Verzeichnisse nicht nur zu archivi
 - **History Cleanup:** Entfernen Sie alte Einträge aus der Liste, während die physischen Dateien sicher erhalten bleiben.
 
 ### 🚀 **Performance & UX**
+- **Enhanced Dashboard:** Neue Detailanzeigen für "Archive Volume" (Total Snapshots) und "Change Delta" (File Count Details).
 - **Smart Scaling:** Intelligente Anzeige von Dateigrößen (automatische Umschaltung KB/MB/GB).
 - **Lazy Loading Core:** Startet bis zu 40% schneller durch bedarfsgerechtes Laden von Bibliotheken.
 
