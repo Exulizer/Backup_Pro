@@ -68,7 +68,7 @@ Es wurde entwickelt, um Projekte und wichtige Verzeichnisse nicht nur zu archivi
 Wir haben die Installation radikal vereinfacht. Sie benötigen **kein Vorwissen** über Python oder Git.
 
 ### **1. Schnellstart**
-1. Laden Sie die install_backup_pro ZIP-Datei herunter und entpacken Sie diese.
+1. Laden Sie die **`install_backup_pro`** ZIP-Datei herunter und entpacken Sie diese.
 2. In dem Ordner finden Sie **`setup.bat`** und **`install_backup_pro.py`**.
 3. Starten Sie **`setup.bat`**.
    - *Der Installer prüft automatisch, ob Python installiert ist.*
