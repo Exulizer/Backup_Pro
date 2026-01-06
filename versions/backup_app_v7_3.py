@@ -1032,6 +1032,16 @@ HTML_TEMPLATE = """
 
             <div class="commander-module p-6">
                 <h2 class="text-[12px] text-slate-500 uppercase font-bold mb-6 tracking-widest">Snapshot Historie</h2>
+                
+                <div class="flex gap-2 mb-4">
+                    <button onclick="clearHistory()" class="text-[10px] font-black uppercase bg-red-500/10 border border-red-500/20 px-3 py-1 rounded text-red-400 hover:bg-red-500/20 transition-all tracking-widest">
+                        Historie leeren
+                    </button>
+                    <button onclick="toggleSort()" class="text-[10px] font-black uppercase bg-blue-500/10 border border-blue-500/20 px-3 py-1 rounded text-blue-400 hover:bg-blue-500/20 transition-all tracking-widest">
+                        Sortieren
+                    </button>
+                </div>
+
                 <div class="overflow-x-auto">
                     <table class="min-w-full text-left text-sm">
                         <thead><tr class="text-slate-500 uppercase text-[10px] font-black"><th class="px-4 py-3">Datum</th><th class="px-4 py-3">Datei</th><th class="px-4 py-3 text-right" id="history-size-header">Größe</th></tr></thead>
@@ -1294,6 +1304,25 @@ HTML_TEMPLATE = """
                             <li class="flex gap-2"><span class="text-blue-500">>></span> <span>Sie können unter Parameter ein "Intervall" einstellen (z.B. 60 Minuten). Dann müssen Sie gar nichts mehr drücken.</span></li>
                             <li class="flex gap-2"><span class="text-blue-500">>></span> <span>Icons: Gelbes Schild = "Datei geändert", Rotes Kreuz = "Datei gelöscht", Grünes Plus = "Datei neu".</span></li>
                         </ul>
+                    </div>
+                </div>
+
+                <!-- Support / Buy Me A Coffee -->
+                <div class="commander-module p-6 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl mt-8 shadow-lg shadow-yellow-500/5">
+                    <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div class="flex-1">
+                            <h4 class="text-xs font-black uppercase text-yellow-400 mb-2 tracking-widest flex items-center gap-2">
+                                <span>☕</span> Support Development
+                            </h4>
+                            <p class="text-sm text-slate-300 leading-relaxed">
+                                Gefällt Ihnen <strong>Backup OS Pro</strong>? Unterstützen Sie die Weiterentwicklung mit einem Kaffee! 
+                                <span class="text-slate-500 block text-xs mt-1">Ihr Support fließt direkt in neue Features und Updates.</span>
+                            </p>
+                        </div>
+                        <a href="https://buymeacoffee.com/exulizer" target="_blank" class="group relative shrink-0">
+                            <div class="absolute -inset-1 bg-yellow-400 rounded-lg opacity-20 group-hover:opacity-40 blur transition duration-200"></div>
+                            <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" class="relative block h-12 w-auto transform group-hover:scale-105 transition-all duration-200" style="height: 50px !important;">
+                        </a>
                     </div>
                 </div>
             </div>
@@ -2466,6 +2495,17 @@ def delete_backup():
     except Exception as e:
         logger.error(f"Löschfehler: {e}")
         return jsonify({"status": "error"})
+
+@app.route("/api/clear_history", methods=["POST"])
+def clear_history_api():
+    """Löscht die gesamte Historie (nur die Einträge, nicht die Dateien)."""
+    try:
+        # Wir überschreiben die History-Datei mit einer leeren Liste
+        safe_write_json(HISTORY_FILE, [])
+        return jsonify({"status": "success"})
+    except Exception as e:
+        logger.error(f"Fehler beim Leeren der Historie: {e}")
+        return jsonify({"status": "error", "message": str(e)})
 
 @app.route("/api/find_duplicates", methods=["POST"])
 def find_duplicates_api():
