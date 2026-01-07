@@ -1,4 +1,4 @@
-# 🛡️ Backup OS Pro - Commander Edition
+# <img src="https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.png?raw=true" width="40" height="40" style="vertical-align: bottom;"> Backup OS Pro - Commander Edition
 
 <p align="center">
   <img src="https://github.com/Exulizer/Backup_Pro/blob/main/assets/backup_os.jpg?raw=true" width="500" alt="Backup OS Pro Dashboard">
