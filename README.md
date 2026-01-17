@@ -1,4 +1,4 @@
-# <img src="https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.png?raw=true" width="40" height="40" style="vertical-align: bottom;"> Backup OS Pro - Commander Edition
+# <img src="https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.png?raw=true" width="30" height="30" style="vertical-align: bottom;"> Backup OS Pro - Commander Edition
 
 <p align="center">
   <img src="https://github.com/Exulizer/Backup_Pro/blob/main/assets/backup_os.jpg?raw=true" width="500" alt="Backup OS Pro Dashboard">
@@ -9,6 +9,18 @@
 Es wurde entwickelt, um Projekte und wichtige Verzeichnisse nicht nur zu archivieren, sondern **kryptografisch zu sichern**, in die Cloud zu replizieren und bei Bedarf mit einem Klick wiederherzustellen.
 
 ---
+
+## **✨ NEUE FEATURES (v7.4 Hybrid Kernel)**
+
+### 🌐 Bilinguales Interface & Logs
+- Vollständig zweisprachige Oberfläche (Deutsch/Englisch) inkl. Konsole, Auto-Scheduler und Cloud-Logs.
+- Sprachumschalt-Button zeigt klar die aktuell aktive Sprache an.
+- Alle Cloud-SFTP-Meldungen (Erfolg, Fehler, „Host oder User fehlt“) sind nun übersetzt und konsistent.
+
+### 🧩 Tasks & Bedienung
+- „Keine Tasks vorhanden“ und der Standard-Taskname sind sprachabhängig und werden korrekt umgeschaltet.
+- Verbesserte Statusanzeige: Kein „undefined%“ mehr nach Abbruch, Fortschritt bleibt sauber.
+- Speichern-Buttons zeigen klaren Status (Speichert…, Erfolgreich gespeichert, Fehler) in der gewählten Sprache.
 
 ## **✨ NEUE FEATURES (v7.3 Hybrid Kernel)**
 
