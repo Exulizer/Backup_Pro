@@ -137,3 +137,7 @@ Gefällt Ihnen **Backup OS Pro**? Helfen Sie mit, die Entwicklung voranzutreiben
 <a href="https://buymeacoffee.com/exulizer" target="_blank">
   <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" >
 </a>
+
+---
+
+License This project is licensed under a proprietary license. You are free to use it for personal use, but modifications and redistribution are strictly prohibited. See the LICENSE file for the full legal text.
