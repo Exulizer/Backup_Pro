@@ -37,7 +37,7 @@ class EndpointFilter(logging.Filter):
     """Filtert erfolgreiche Status-Abfragen aus dem Log, um Spam zu vermeiden."""
     def filter(self, record):
         msg = record.getMessage()
-        # Unterdrücke 200 OK Logs für Polling-Endpunkte
+        # Unterdrücke 200 OK Logs für Polling-/SSE-Endpunkte
         ignored_endpoints = [
             "/api/get_backup_status",
             "/api/get_events",
@@ -47,10 +47,15 @@ class EndpointFilter(logging.Filter):
         ]
         if any(endpoint in msg for endpoint in ignored_endpoints) and " 200 " in msg:
             return False
+        # Unterdrücke harmlose Disconnect-Logs für /api/stream (SSE schließt/verbindet oft neu)
+        if "/api/stream" in msg and "Client disconnected while serving" in msg:
+            return False
         return True
 
-# Filter auf den Werkzeug-Logger anwenden
-logging.getLogger("werkzeug").addFilter(EndpointFilter())
+# Filter auf Webserver-Logger anwenden
+endpoint_filter = EndpointFilter()
+logging.getLogger("werkzeug").addFilter(endpoint_filter)
+logging.getLogger("waitress").addFilter(endpoint_filter)
 
 # Globaler Status für Async-Jobs
 current_job_status = {
@@ -181,11 +186,19 @@ def tr(key, default=None, **kwargs):
     """
     Backend translation helper.
     Uses CURRENT_LANG to find the translation for 'key'.
-    If not found, returns default (or key if default is None).
-    Supports format strings: tr("hello.name", "Hello {name}", name="World")
+    Fallback Strategy:
+      1. CURRENT_LANG
+      2. 'en' (if different)
+      3. default (arg)
+      4. key itself
     """
     lang_data = load_language_dict(CURRENT_LANG)
     val = lang_data.get(key)
+    
+    # Fallback to English if key missing and we are not already in English
+    if val is None and CURRENT_LANG != 'en':
+        en_data = load_language_dict('en')
+        val = en_data.get(key)
     
     if val is None:
         val = default if default is not None else key
@@ -4748,11 +4761,9 @@ HTML_TEMPLATE = """
                     const pctEl = document.getElementById('disk-percent');
                     const warnEl = document.getElementById('disk-warning');
                     
-                    // Reset Classes (preserve base structure)
                     bar.className = "h-full w-0 transition-all duration-1000 relative z-10";
                     pctEl.className = "text-[11px] font-bold";
                     
-                    // Color Logic
                     let colorClass = "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]";
                     let textClass = "text-blue-400";
                     
@@ -4773,12 +4784,11 @@ HTML_TEMPLATE = """
                     pctEl.className += " " + textClass;
                     pctEl.innerText = currentDiskUsedPercent.toFixed(1) + '%';
                     
-                    // Force GB display for Drive Telemetry
                     const formatGB = (b) => {
                         if (!b) return "0,00 GB";
                         return (b / (1024**3)).toFixed(2).replace('.', ',') + " GB";
                     };
-
+        
                     if(document.getElementById('disk-used-val')) document.getElementById('disk-used-val').innerText = formatGB(data.used);
                     if(document.getElementById('disk-free-val')) document.getElementById('disk-free-val').innerText = formatGB(data.free);
                     if(document.getElementById('disk-total-val')) document.getElementById('disk-total-val').innerText = formatGB(data.total);
@@ -4787,7 +4797,117 @@ HTML_TEMPLATE = """
                 }
             } catch(e) {}
         }
-
+        
+        function refreshSourceAnalysis() {
+            updateDiskStats();
+            
+            let analysisPath = document.getElementById('source').value;
+            if(document.getElementById('config-cloud-enabled') && document.getElementById('config-cloud-enabled').checked) {
+                 const dir = document.getElementById('config-cloud-direction') ? document.getElementById('config-cloud-direction').value : 'upload';
+                 if(dir === 'download') {
+                     analysisPath = document.getElementById('dest').value;
+                 }
+            }
+            
+            if(analysisPath) {
+                fetch('/api/analyze_source', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: analysisPath}) })
+                    .then(r => r.json())
+                    .then(sData => {
+                        if(document.getElementById('src-size')) document.getElementById('src-size').innerText = formatSize(sData.size);
+                        if(document.getElementById('src-files')) document.getElementById('src-files').innerText = sData.count + " FILES";
+        
+                        const dSizeVal = document.getElementById('delta-size-val');
+                        const dSizeBadge = document.getElementById('delta-size-badge');
+                        const dFilesVal = document.getElementById('delta-files-val');
+                        const dFilesBadge = document.getElementById('delta-files-badge');
+                        const dRefInfo = document.getElementById('delta-ref-info');
+                        const dModeBadge = document.getElementById('delta-mode-badge');
+        
+                        let deltaMode = "LOCAL";
+                        if(document.getElementById('config-cloud-enabled') && document.getElementById('config-cloud-enabled').checked) {
+                             const dir = document.getElementById('config-cloud-direction') ? document.getElementById('config-cloud-direction').value : 'upload';
+                             deltaMode = dir === 'download' ? "DOWNLOAD" : "UPLOAD";
+                        }
+                        if(dModeBadge) dModeBadge.innerText = deltaMode;
+        
+                        const normAnalysisPath = analysisPath.replace(/\\\\/g, '/').toLowerCase();
+                        
+                        let relevantHistory = globalHistory.filter(e => {
+                            if(!e.source_path) return false;
+                            return e.source_path.replace(/\\\\/g, '/').toLowerCase() === normAnalysisPath;
+                        });
+        
+                        if(dSizeVal && relevantHistory.length > 0) {
+                            let lastEntry = relevantHistory[0];
+                            for (let i = 1; i < relevantHistory.length; i++) {
+                                const entry = relevantHistory[i];
+                                if ((entry.timestamp || "") > (lastEntry.timestamp || "")) {
+                                    lastEntry = entry;
+                                }
+                            }
+                            
+                            const lastCount = lastEntry.file_count || 0;
+                            const currentCount = sData.count || 0;
+                            const deltaCount = currentCount - lastCount;
+                            
+                            let deltaSize = 0;
+                            let validDelta = false;
+        
+                            if (lastEntry.source_size) {
+                                const lastSize = lastEntry.source_size;
+                                const currentSize = sData.size || 0;
+                                deltaSize = currentSize - lastSize;
+                                validDelta = true;
+                            } else {
+                                validDelta = false;
+                            }
+                            
+                            if (validDelta) {
+                                const sizeFmt = formatSize(Math.abs(deltaSize));
+                                dSizeVal.innerText = (deltaSize > 0 ? "+" : (deltaSize < 0 ? "-" : "")) + sizeFmt;
+                                
+                                if(deltaSize === 0) {
+                                    dSizeBadge.innerText = "UNCHANGED";
+                                    dSizeBadge.className = "text-[10px] font-bold text-slate-600 block mt-1";
+                                } else if(deltaSize > 0) {
+                                    dSizeBadge.innerText = "INCREASE";
+                                    dSizeBadge.className = "text-[10px] font-bold text-red-400 block mt-1";
+                                } else {
+                                    dSizeBadge.innerText = "DECREASE";
+                                    dSizeBadge.className = "text-[10px] font-bold text-emerald-400 block mt-1";
+                                }
+                            } else {
+                                dSizeVal.innerText = formatSize(sData.size || 0);
+                                dSizeBadge.innerText = "BASE UPDATE";
+                                dSizeBadge.className = "text-[10px] font-bold text-blue-400 block mt-1";
+                            }
+                            
+                            dFilesVal.innerText = (deltaCount > 0 ? "+" : "") + deltaCount;
+                             if(deltaCount === 0) {
+                                dFilesBadge.innerText = "UNCHANGED";
+                                dFilesBadge.className = "text-[10px] font-bold text-slate-600 block mt-1";
+                            } else if(deltaCount > 0) {
+                                dFilesBadge.innerText = "INCREASE";
+                                dFilesBadge.className = "text-[10px] font-bold text-red-400 block mt-1";
+                            } else {
+                                dFilesBadge.innerText = "DECREASE";
+                                dFilesBadge.className = "text-[10px] font-bold text-emerald-400 block mt-1";
+                            }
+                            
+                            if(dRefInfo) dRefInfo.innerText = lastEntry.timestamp || "Unknown";
+                            
+                        } else if (dSizeVal) {
+                            dSizeVal.innerText = formatSize(sData.size || 0);
+                            dSizeBadge.innerText = "INITIAL";
+                            dFilesVal.innerText = (sData.count || 0);
+                            dFilesBadge.innerText = "INITIAL";
+                            if(dRefInfo) dRefInfo.innerText = "Kein Backup";
+                        }
+                    })
+                    .catch(e => console.error("Analyze Source Error:", e));
+            }
+        }
+        
         async function loadData() {
             try {
                 // STOP Boot Sequence Simulation if running
@@ -5219,129 +5339,7 @@ HTML_TEMPLATE = """
 
             storageChart.data.datasets[0].label = `Größe (${globalUnit})`;
             storageChart.update();
-            updateDiskStats();
-            
-            // Smart Path Selection: In Download mode, analyze the Destination (Local) instead of Source (Remote)
-            let analysisPath = document.getElementById('source').value;
-            if(document.getElementById('config-cloud-enabled') && document.getElementById('config-cloud-enabled').checked) {
-                 const dir = document.getElementById('config-cloud-direction') ? document.getElementById('config-cloud-direction').value : 'upload';
-                 if(dir === 'download') {
-                     analysisPath = document.getElementById('dest').value;
-                 }
-            }
-            
-            if(analysisPath) {
-                fetch('/api/analyze_source', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: analysisPath}) })
-                    .then(r => r.json())
-                    .then(sData => {
-                        if(document.getElementById('src-size')) document.getElementById('src-size').innerText = formatSize(sData.size);
-                        if(document.getElementById('src-files')) document.getElementById('src-files').innerText = sData.count + " FILES";
-
-                        // Delta Calculation (New Hybrid Logic)
-                        const dSizeVal = document.getElementById('delta-size-val');
-                        const dSizeBadge = document.getElementById('delta-size-badge');
-                        const dFilesVal = document.getElementById('delta-files-val');
-                        const dFilesBadge = document.getElementById('delta-files-badge');
-                        const dRefInfo = document.getElementById('delta-ref-info');
-                        const dModeBadge = document.getElementById('delta-mode-badge');
-
-                        // Determine Mode
-                        let deltaMode = "LOCAL";
-                        if(document.getElementById('config-cloud-enabled') && document.getElementById('config-cloud-enabled').checked) {
-                             const dir = document.getElementById('config-cloud-direction') ? document.getElementById('config-cloud-direction').value : 'upload';
-                             deltaMode = dir === 'download' ? "DOWNLOAD" : "UPLOAD";
-                        }
-                        if(dModeBadge) dModeBadge.innerText = deltaMode;
-
-                        // Unified Delta Calculation (Enabled for all modes including DOWNLOAD)
-                        // Filter history for current analysis path (Normalize slashes for comparison)
-                        // NOTE: We use quadruple backslash in Python string to result in double backslash in JS
-                        const normAnalysisPath = analysisPath.replace(/\\\\/g, '/').toLowerCase();
-                        
-                        let relevantHistory = globalHistory.filter(e => {
-                            if(!e.source_path) return false; // Ignore old entries without source_path
-                            return e.source_path.replace(/\\\\/g, '/').toLowerCase() === normAnalysisPath;
-                        });
-
-                        if(dSizeVal && relevantHistory.length > 0) {
-                            // Find latest backup
-                            let lastEntry = relevantHistory[0];
-                            for (let i = 1; i < relevantHistory.length; i++) {
-                                const entry = relevantHistory[i];
-                                if ((entry.timestamp || "") > (lastEntry.timestamp || "")) {
-                                    lastEntry = entry;
-                                }
-                            }
-                            
-                            const lastCount = lastEntry.file_count || 0;
-                            const currentCount = sData.count || 0;
-                            const deltaCount = currentCount - lastCount;
-                            
-                            // Use source_size (uncompressed) if available
-                            // If lastEntry has no source_size (old backup), we cannot compare accurately against current uncompressed source.
-                            // To avoid misleading "Increase", we treat it as a fresh start for stats.
-                            let deltaSize = 0;
-                            let validDelta = false;
-
-                            if (lastEntry.source_size) {
-                                const lastSize = lastEntry.source_size;
-                                const currentSize = sData.size || 0;
-                                deltaSize = currentSize - lastSize;
-                                validDelta = true;
-                            } else {
-                                // Fallback for old backups: Do not show misleading delta
-                                validDelta = false;
-                            }
-                            
-                            // Size Display
-                            if (validDelta) {
-                                const sizeFmt = formatSize(Math.abs(deltaSize));
-                                dSizeVal.innerText = (deltaSize > 0 ? "+" : (deltaSize < 0 ? "-" : "")) + sizeFmt;
-                                
-                                if(deltaSize === 0) {
-                                    dSizeBadge.innerText = "UNCHANGED";
-                                    dSizeBadge.className = "text-[10px] font-bold text-slate-600 block mt-1";
-                                } else if(deltaSize > 0) {
-                                    dSizeBadge.innerText = "INCREASE";
-                                    dSizeBadge.className = "text-[10px] font-bold text-red-400 block mt-1";
-                                } else {
-                                    dSizeBadge.innerText = "DECREASE";
-                                    dSizeBadge.className = "text-[10px] font-bold text-emerald-400 block mt-1";
-                                }
-                            } else {
-                                // Invalid Delta (Old Backup vs New Source) -> Show Current Size but no Delta
-                                dSizeVal.innerText = formatSize(sData.size || 0);
-                                dSizeBadge.innerText = "BASE UPDATE"; // Indicate that we are resetting the baseline
-                                dSizeBadge.className = "text-[10px] font-bold text-blue-400 block mt-1";
-                            }
-                            
-                            // Files Display
-                            dFilesVal.innerText = (deltaCount > 0 ? "+" : "") + deltaCount;
-                             if(deltaCount === 0) {
-                                dFilesBadge.innerText = "UNCHANGED";
-                                dFilesBadge.className = "text-[10px] font-bold text-slate-600 block mt-1";
-                            } else if(deltaCount > 0) {
-                                dFilesBadge.innerText = "INCREASE";
-                                dFilesBadge.className = "text-[10px] font-bold text-red-400 block mt-1";
-                            } else {
-                                dFilesBadge.innerText = "DECREASE";
-                                dFilesBadge.className = "text-[10px] font-bold text-emerald-400 block mt-1";
-                            }
-                            
-                            if(dRefInfo) dRefInfo.innerText = lastEntry.timestamp || "Unknown";
-                            
-                        } else if (dSizeVal) {
-                            // Initial State
-                            dSizeVal.innerText = formatSize(sData.size || 0);
-                            dSizeBadge.innerText = "INITIAL";
-                            dFilesVal.innerText = (sData.count || 0);
-                            dFilesBadge.innerText = "INITIAL";
-                            if(dRefInfo) dRefInfo.innerText = "Kein Backup";
-                        }
-                    })
-                    .catch(e => console.error("Analyze Source Error:", e));
-            }
-            calculateHealth();
+            refreshSourceAnalysis();
         }
 
         function clearLogs() {
@@ -5656,25 +5654,25 @@ HTML_TEMPLATE = """
             const data = await resp.json();
             if(data.path) {
                 document.getElementById(id).value = data.path;
-                updateDashboardDisplays();
+                refreshSourceAnalysis();
             }
         }
-
+        
         async function pickFile(id) {
             const resp = await fetch('/api/pick_file');
             const data = await resp.json();
             if(data.path) {
                 document.getElementById(id).value = data.path;
-                updateDashboardDisplays();
+                refreshSourceAnalysis();
             }
         }
-
+        
         async function pickFiles(id) {
             const resp = await fetch('/api/pick_files');
             const data = await resp.json();
             if(data.path) {
                 document.getElementById(id).value = data.path;
-                updateDashboardDisplays();
+                refreshSourceAnalysis();
             }
         }
 
@@ -5965,7 +5963,7 @@ HTML_TEMPLATE = """
         
         const path = document.getElementById('config-cloud-local-path').value;
         if(!path) {
-            alert("Bitte einen lokalen Pfad angeben!");
+            alert(t("dialog.specifyLocalPath"));
             btn.innerText = originalText;
             btn.disabled = false;
             return;
@@ -6008,11 +6006,11 @@ HTML_TEMPLATE = """
             
             // User-Input abfragen
             let currentPath = document.getElementById('config-cloud-path').value;
-            const newPath = prompt("Welchen Ordner möchten Sie anlegen?", currentPath);
+            const newPath = prompt(t("dialog.createFolderPrompt"), currentPath);
             
             if (newPath === null) return; // Abbrechen
             if (!newPath) {
-                 alert("Bitte einen Pfad angeben!");
+                 alert(t("dialog.specifyPath"));
                  return;
             }
 
@@ -6955,28 +6953,48 @@ HTML_TEMPLATE = """
                 document.getElementById('task-dest').value = data.path;
             }
         }
-
+        
         let isBackupActive = false;
-
-        // --- SSE & Status Management (Replaces Polling) ---
+        
         let eventSource = null;
         let sseRetryCount = 0;
-        // const maxSseRetries = 5; // Infinite retry now
-
+        
+        function setSSEStatus(mode, delayMs) {
+            const ind = document.getElementById('status-indicator');
+            const txt = document.getElementById('console-status-text');
+            if(!ind || !txt) return;
+            if(isBackupActive) return;
+            
+            if(mode === 'connected') {
+                ind.className = "w-2 h-2 rounded-full bg-emerald-500 transition-colors duration-300";
+                txt.innerText = t("console.statusReady", "SYSTEM READY");
+                txt.className = "text-[10px] font-black uppercase tracking-widest text-emerald-400";
+            } else if(mode === 'reconnecting') {
+                ind.className = "w-2 h-2 rounded-full bg-amber-500 animate-pulse transition-colors duration-300";
+                const seconds = Math.max(0, Math.round((delayMs || 0) / 1000));
+                txt.innerText = t("console.connectionLost", "Connection lost. Reconnect in ") + seconds + "s...";
+                txt.className = "text-[10px] font-black uppercase tracking-widest text-amber-400";
+            } else if(mode === 'disconnected') {
+                ind.className = "w-2 h-2 rounded-full bg-red-500 transition-colors duration-300";
+                txt.innerText = t("console.connectionError", "Connection error.");
+                txt.className = "text-[10px] font-black uppercase tracking-widest text-red-400";
+            }
+        }
+        
         function setupSSE() {
             if(eventSource) eventSource.close();
-
+        
             console.log("Connecting to SSE stream...");
             eventSource = new EventSource('/api/stream');
-
+        
             eventSource.onopen = () => {
                 console.log("SSE Connected.");
                 sseRetryCount = 0;
-                // Clear potential reconnect warning if it was the last message
                 const log = document.getElementById('log');
                 if(log && log.lastChild && log.lastChild.innerText.includes("Reconnect")) {
                     addLog(t("console.connectionRestored", "Connection restored."), "success");
                 }
+                setSSEStatus('connected');
             };
 
             eventSource.addEventListener('status', (e) => {
@@ -7018,24 +7036,28 @@ HTML_TEMPLATE = """
             };
 
             eventSource.onerror = (err) => {
-                // console.error("SSE Error:", err); // Suppress red error log
                 if(eventSource) {
                     eventSource.close();
                     eventSource = null;
                 }
                 
-                // Retry Logic (Infinite with backoff cap)
                 sseRetryCount++;
-                const delay = Math.min(1000 * (2 ** sseRetryCount), 30000); // Max 30s delay
+                const backoff = [0, 1000, 2000, 5000, 10000, 20000, 30000];
+                const idx = Math.min(sseRetryCount - 1, backoff.length - 1);
+                const delay = backoff[idx];
                 console.log(`Retrying SSE in ${delay}ms (Attempt ${sseRetryCount})...`);
                 
-                // Visual feedback if disconnected for too long (but don't spam)
                 if(sseRetryCount > 2) {
                      const log = document.getElementById('log');
-                     // Simple check to avoid spamming the log
                      if(log && log.lastChild && !log.lastChild.innerText.includes("Reconnect")) {
                          addLog(t("console.connectionLost", "Connection lost. Reconnect in ") + (delay/1000) + "s...", "warn");
                      }
+                }
+                
+                if(sseRetryCount > 5) {
+                    setSSEStatus('disconnected');
+                } else {
+                    setSSEStatus('reconnecting', delay);
                 }
                 
                 setTimeout(setupSSE, delay);
@@ -7045,15 +7067,15 @@ HTML_TEMPLATE = """
         // Heartbeat Monitor (Fallback if SSE hangs silently)
         let lastHeartbeat = Date.now();
         setInterval(() => {
-            // Check if backup is theoretically active but we haven't heard anything
-            if(isBackupActive && (Date.now() - lastHeartbeat > 20000)) { // 20s without message during backup
+            if(isBackupActive && (Date.now() - lastHeartbeat > 20000)) {
                  console.warn("SSE Heartbeat missing during backup. Force Reconnecting...");
                  lastHeartbeat = Date.now();
+                 setSSEStatus('reconnecting', 0);
                  setupSSE();
-            } else if (!isBackupActive && (Date.now() - lastHeartbeat > 45000)) { // 45s idle
-                 // Less aggressive when idle
+            } else if (!isBackupActive && (Date.now() - lastHeartbeat > 45000)) {
                  console.warn("SSE Heartbeat missing (idle). Reconnecting...");
                  lastHeartbeat = Date.now();
+                 setSSEStatus('reconnecting', 0);
                  setupSSE();
             }
         }, 5000);
