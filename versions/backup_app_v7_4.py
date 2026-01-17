@@ -5050,7 +5050,6 @@ HTML_TEMPLATE = """
                 const avgSizeActiveOnly = daysWithBackups > 0 ? totalSize / daysWithBackups : 0;
                 const successRate = labels.length ? Math.round((daysWithBackups / labels.length) * 100) : 0;
                 
-                // Extra Stats Calculation
                 const avgPerBackup = totalCount > 0 ? totalSize / totalCount : 0;
                 const lastSnapSize = relevantData.length > 0 ? relevantData[relevantData.length - 1].size : 0;
                 
@@ -5063,12 +5062,22 @@ HTML_TEMPLATE = """
                      const diffMs = now - lastTs;
                      const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
                      const diffDays = Math.floor(diffHrs / 24);
+                     const lang = window.BP_LANG || 'de';
                      
-                     if(diffDays > 0) timeAgoStr = `vor ${diffDays} Tag${diffDays!==1?'en':''}`;
-                     else if(diffHrs > 0) timeAgoStr = `vor ${diffHrs} Std.`;
-                     else {
-                        const diffMin = Math.floor(diffMs / (1000 * 60));
-                        timeAgoStr = `vor ${diffMin} Min.`;
+                     if(lang === 'en') {
+                        if(diffDays > 0) timeAgoStr = `${diffDays} day${diffDays!==1?'s':''} ago`;
+                        else if(diffHrs > 0) timeAgoStr = `${diffHrs} h ago`;
+                        else {
+                            const diffMin = Math.floor(diffMs / (1000 * 60));
+                            timeAgoStr = `${diffMin} min ago`;
+                        }
+                     } else {
+                        if(diffDays > 0) timeAgoStr = `vor ${diffDays} Tag${diffDays!==1?'en':''}`;
+                        else if(diffHrs > 0) timeAgoStr = `vor ${diffHrs} Std.`;
+                        else {
+                            const diffMin = Math.floor(diffMs / (1000 * 60));
+                            timeAgoStr = `vor ${diffMin} Min.`;
+                        }
                      }
                 }
 
@@ -5077,18 +5086,18 @@ HTML_TEMPLATE = """
                         <div class="absolute top-0 right-0 p-2 opacity-10 group-hover/stat:opacity-20 transition-opacity">
                             <svg class="w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                         </div>
-                        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-3">Gesamtvolumen</span>
+                        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-3" data-i18n="dashboard.totalVolumeCardTitle">Gesamtvolumen</span>
                         <div class="flex flex-col gap-1 mt-2">
                             <div class="flex justify-between items-baseline">
-                                <span class="text-[10px] text-slate-400">Summe:</span>
+                                <span class="text-[10px] text-slate-400" data-i18n="dashboard.totalVolumeSumLabel">Summe:</span>
                                 <span class="text-sm font-black text-blue-400 font-mono">${formatSize(totalSize)}</span>
                             </div>
                             <div class="flex justify-between items-baseline">
-                                <span class="text-[10px] text-slate-400">Ø pro Snap:</span>
+                                <span class="text-[10px] text-slate-400" data-i18n="dashboard.totalVolumeAvgPerSnapLabel">Ø pro Snap:</span>
                                 <span class="text-xs font-bold text-slate-400 font-mono">${formatSize(avgPerBackup)}</span>
                             </div>
                             <div class="flex justify-between items-baseline border-t border-white/5 pt-1 mt-1">
-                                <span class="text-[10px] text-slate-500">Letzter:</span>
+                                <span class="text-[10px] text-slate-500" data-i18n="dashboard.totalVolumeLastLabel">Letzter:</span>
                                 <span class="text-xs font-bold text-blue-300 font-mono">${formatSize(lastSnapSize)}</span>
                             </div>
                         </div>
@@ -5097,18 +5106,18 @@ HTML_TEMPLATE = """
                         <div class="absolute top-0 right-0 p-2 opacity-10 group-hover/stat:opacity-20 transition-opacity">
                             <svg class="w-8 h-8 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                         </div>
-                        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-3">Tägliches Volumen</span>
+                        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-3" data-i18n="dashboard.dailyVolumeCardTitle">Tägliches Volumen</span>
                         <div class="flex flex-col gap-1 mt-2">
                             <div class="flex justify-between items-baseline">
-                                <span class="text-[10px] text-slate-400">Ø Gesamt:</span>
+                                <span class="text-[10px] text-slate-400" data-i18n="dashboard.dailyVolumeAvgOverallLabel">Ø Gesamt:</span>
                                 <span class="text-sm font-black text-slate-300 font-mono">${formatSize(avgSize)}</span>
                             </div>
                             <div class="flex justify-between items-baseline">
-                                <span class="text-[10px] text-slate-400">Ø Aktiv:</span>
+                                <span class="text-[10px] text-slate-400" data-i18n="dashboard.dailyVolumeAvgActiveLabel">Ø Aktiv:</span>
                                 <span class="text-xs font-bold text-slate-400 font-mono">${formatSize(avgSizeActiveOnly)}</span>
                             </div>
                             <div class="flex justify-between items-baseline border-t border-white/5 pt-1 mt-1">
-                                <span class="text-[10px] text-slate-500">Max Peak:</span>
+                                <span class="text-[10px] text-slate-500" data-i18n="dashboard.dailyVolumeMaxPeakLabel">Max Peak:</span>
                                 <span class="text-xs font-bold text-purple-400 font-mono">${formatSize(maxVal)}</span>
                             </div>
                         </div>
@@ -5117,23 +5126,26 @@ HTML_TEMPLATE = """
                         <div class="absolute top-0 right-0 p-2 opacity-10 group-hover/stat:opacity-20 transition-opacity">
                             <svg class="w-8 h-8 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         </div>
-                        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-3">Backups</span>
+                        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-3" data-i18n="dashboard.backupStatsCardTitle">Backups</span>
                         <div class="flex flex-col gap-1 mt-2">
                             <div class="flex justify-between items-baseline">
-                                <span class="text-[10px] text-slate-400">Anzahl:</span>
+                                <span class="text-[10px] text-slate-400" data-i18n="dashboard.backupStatsCountLabel">Anzahl:</span>
                                 <span class="text-sm font-black text-emerald-400 font-mono">${totalCount}</span>
                             </div>
                             <div class="flex justify-between items-baseline">
-                                <span class="text-[10px] text-slate-400">Frequenz:</span>
-                                <span class="text-xs font-bold text-slate-400 font-mono">~${avgDailyFreq} / Tag</span>
+                                <span class="text-[10px] text-slate-400" data-i18n="dashboard.backupStatsFrequencyLabel">Frequenz:</span>
+                                <span class="text-xs font-bold text-slate-400 font-mono">~${avgDailyFreq} <span data-i18n="dashboard.backupStatsPerDaySuffix">/ Tag</span></span>
                             </div>
                             <div class="flex justify-between items-baseline border-t border-white/5 pt-1 mt-1">
-                                <span class="text-[10px] text-slate-500">Letztes:</span>
+                                <span class="text-[10px] text-slate-500" data-i18n="dashboard.backupStatsLastLabel">Letztes:</span>
                                 <span class="text-xs font-bold text-emerald-300 font-mono">${timeAgoStr}</span>
                             </div>
                         </div>
                     </div>
                 `;
+                if (window.BP_I18N_DICT) {
+                    try { applyTranslations(window.BP_I18N_DICT); } catch(e) {}
+                }
             }
             
             const width = container.clientWidth || 800;
@@ -5143,7 +5155,10 @@ HTML_TEMPLATE = """
             const chartH = height - (padding * 2);
 
             if(labels.length < 2) {
-                 container.innerHTML = '<div class="absolute inset-0 flex items-center justify-center text-xs text-slate-600 font-mono">Nicht genügend Daten für Verlauf (min. 2 Tage)</div>';
+                 container.innerHTML = '<div class="absolute inset-0 flex items-center justify-center text-xs text-slate-600 font-mono" data-i18n="dashboard.notEnoughData">Nicht genügend Daten für Verlauf (min. 2 Tage)</div>';
+                 if (window.BP_I18N_DICT) {
+                    try { applyTranslations(window.BP_I18N_DICT); } catch(e) {}
+                 }
                  return;
             }
 
