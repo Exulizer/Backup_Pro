@@ -69,7 +69,7 @@ Der Fokus dieses Updates lag auf **Internationalisierung** und **Konsistenz**.
 ## **🔄 Updates & Wartung**
 
 Das **Sorglos-System** macht Updates kinderleicht:
-1. Starten Sie einfach den **Backup Pro Installer** (oder nutzen Sie die Update-Funktion im Dashboard).
+1. Starten Sie einfach den **Backup Pro Installer**.
 2. Der Installer lädt automatisch die **neueste Version** herunter und installiert sie.
 3. Beim nächsten Start wählt der Launcher automatisch die aktuellste Version.
 
