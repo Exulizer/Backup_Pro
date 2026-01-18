@@ -25,12 +25,31 @@ import sqlite3
 
 # --- Konfiguration & Logging ---
 
-# Logging initialisieren für bessere Fehlerbehebung
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+class JSONFormatter(logging.Formatter):
+    """Formatiert Logs als JSON-Zeilen für maschinelle Verarbeitung."""
+    def format(self, record):
+        log_record = {
+            "timestamp": self.formatTime(record, self.datefmt),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+            "module": record.module,
+            "line": record.lineno
+        }
+        if record.exc_info:
+            log_record["exception"] = self.formatException(record.exc_info)
+        return json.dumps(log_record)
+
+# Setup Logging
+# Versuche Config manuell zu lesen für Debug-Flag (bevor Flask/App startet)
+DEBUG_MODE = False
+try:
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backup_config.json")
+    if os.path.exists(config_path):
+        with open(config_path, 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+            DEBUG_MODE = cfg.get("debug_mode", False)
+except: pass
 
 # --- Log Filtering ---
 class EndpointFilter(logging.Filter):
@@ -43,7 +62,9 @@ class EndpointFilter(logging.Filter):
             "/api/get_events",
             "/api/get_cloud_backup_status",
             "/api/scan_progress",
-            "/api/stream"
+            "/api/stream",
+            "/api/stats",
+            "/api/health"
         ]
         if any(endpoint in msg for endpoint in ignored_endpoints) and " 200 " in msg:
             return False
@@ -52,10 +73,29 @@ class EndpointFilter(logging.Filter):
             return False
         return True
 
-# Filter auf Webserver-Logger anwenden
-endpoint_filter = EndpointFilter()
-logging.getLogger("werkzeug").addFilter(endpoint_filter)
-logging.getLogger("waitress").addFilter(endpoint_filter)
+# Logger konfigurieren
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.DEBUG) # Root muss alles durchlassen, Handler filtern dann
+
+# 1. Console Handler (Normaler Text, gefiltert, INFO)
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+console_handler.addFilter(EndpointFilter()) # Filter NUR für Konsole
+
+# 2. File Handler (JSON, ungefiltert, DEBUG)
+file_handler = logging.FileHandler(os.path.join(os.path.dirname(os.path.abspath(__file__)), "backup_debug.log"), encoding='utf-8')
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(JSONFormatter())
+# Kein Filter -> Schreibt ALLES (inkl. Polling Spam) für Debugging
+
+root_logger.addHandler(console_handler)
+root_logger.addHandler(file_handler)
+
+# Werkzeug/Waitress nicht mehr global filtern, sondern propagieren lassen
+# Damit landen sie im Root Logger -> Console (gefiltert) + File (ungefiltert)
+
+logger = logging.getLogger(__name__)
 
 # Globaler Status für Async-Jobs
 current_job_status = {
@@ -82,6 +122,42 @@ def is_backup_locked():
     return True
 
 event_queue = [] # Queue für UI-Nachrichten
+
+# Event-Queue Tuning: unterschiedliche Lebensdauern nach Typ
+EVENT_MAX_SIZE = 200
+EVENT_TTL_SECONDS = {
+    "info": 5 * 60,
+    "success": 15 * 60,
+    "warning": 30 * 60,
+    "error": 60 * 60,
+}
+
+def _prune_event_queue(now_ts):
+    """Entfernt alte Events und priorisiert Fehler-/Warn-Events beim Verwerfen."""
+    global event_queue
+    try:
+        pruned = []
+        for ev in event_queue:
+            ev_type = ev.get("type", "info")
+            ttl = EVENT_TTL_SECONDS.get(ev_type, EVENT_TTL_SECONDS["info"])
+            ts = ev.get("timestamp", now_ts)
+            if now_ts - ts <= ttl:
+                pruned.append(ev)
+        event_queue = pruned
+
+        if len(event_queue) > EVENT_MAX_SIZE:
+            while len(event_queue) > EVENT_MAX_SIZE:
+                drop_idx = None
+                for idx, ev in enumerate(event_queue):
+                    if ev.get("type") not in ("error", "warning"):
+                        drop_idx = idx
+                        break
+                if drop_idx is None:
+                    event_queue.pop(0)
+                else:
+                    event_queue.pop(drop_idx)
+    except:
+        pass
 
 # --- SSE Announcer ---
 import queue
@@ -122,15 +198,13 @@ class MessageAnnouncer:
 
 sse_announcer = MessageAnnouncer()
 
-def add_event(message, type="info"):
+def add_event(message, type="info", category="system"):
     """Fügt eine Nachricht zur Event-Queue hinzu."""
     global event_queue
     try:
-        # Keep queue manageable
-        if len(event_queue) > 50:
-             event_queue.pop(0)
+        now_ts = time.time()
+        _prune_event_queue(now_ts)
         
-        # Try to translate if it looks like a key
         msg_text = message
         key = None
         try:
@@ -141,12 +215,18 @@ def add_event(message, type="info"):
         except:
             pass
             
-        event_data = {"message": msg_text, "key": key, "type": type, "timestamp": time.time()}
+        event_data = {
+            "message": msg_text,
+            "key": key,
+            "type": type,
+            "category": category,
+            "timestamp": now_ts,
+        }
         event_queue.append(event_data)
         
-        # Push to SSE
         sse_announcer.announce(event_data, event_type="log")
-    except: pass
+    except:
+        pass
 
 
 # Re-Indexing Status
@@ -915,11 +995,11 @@ def save_config(config_data):
         if safe_write_json(CONFIG_FILE, to_save):
             return True
         else:
-            add_event(tr("console.saveConfigIOError", "Fehler beim Speichern der Konfiguration (IO)."), "error")
+            add_event(tr("console.saveConfigIOError", "Fehler beim Speichern der Konfiguration (IO)."), "error", "system")
             return False
     except Exception as e:
         logger.error(f"Fehler beim Speichern der Konfiguration: {e}")
-        add_event(tr("console.saveConfigError", "Config Save Error: {error}", error=str(e)), "error")
+        add_event(tr("console.saveConfigError", "Config Save Error: {error}", error=str(e)), "error", "system")
         return False
 
 # --- GitHub Helper ---
@@ -936,7 +1016,7 @@ def run_github_sync(config, dest_root, job_status_update=True, status_tracker=No
     if shutil.which("git") is None:
         msg = tr("console.githubGitMissing", "Git ist nicht installiert oder nicht im PATH gefunden.")
         logger.error(msg)
-        add_event(msg, "error")
+        add_event(msg, "error", "cloud")
         return {"status": "error", "message": msg}
 
     gh_url = config.get("github_url", "")
@@ -1016,7 +1096,7 @@ def run_github_sync(config, dest_root, job_status_update=True, status_tracker=No
             subprocess.run(["git", "-C", repo_path, "pull"], check=True, capture_output=True, env=env)
             msg = tr("console.githubRepoUpdated", "GitHub: Repo {name} aktualisiert.", name=repo_name)
             log_status(msg, "success")
-            add_event(msg, "success")
+            add_event(msg, "success", "cloud")
             return {"status": "success", "message": msg}
         else:
             # Clone
@@ -1024,7 +1104,7 @@ def run_github_sync(config, dest_root, job_status_update=True, status_tracker=No
             subprocess.run(["git", "clone", auth_url, repo_path], check=True, capture_output=True, env=env)
             msg = tr("console.githubRepoCloned", "GitHub: Repo {name} geklont.", name=repo_name)
             log_status(msg, "success")
-            add_event(msg, "success")
+            add_event(msg, "success", "cloud")
             return {"status": "success", "message": msg}
             
     except subprocess.CalledProcessError as e:
@@ -1037,13 +1117,13 @@ def run_github_sync(config, dest_root, job_status_update=True, status_tracker=No
         logger.error(f"GitHub Error: {clean_err}")
         msg = tr("console.githubError", "GitHub Fehler: {error}", error=clean_err)
         log_status(msg, "error")
-        add_event(msg, "error")
+        add_event(msg, "error", "cloud")
         return {"status": "error", "message": clean_err}
     except Exception as e:
         logger.error(f"GitHub Module Error: {e}")
         msg = tr("console.githubError", "GitHub Fehler: {error}", error=str(e))
         log_status(msg, "error")
-        add_event(msg, "error")
+        add_event(msg, "error", "cloud")
         return {"status": "error", "message": str(e)}
 
 # --- Datenbank Helper ---
@@ -1137,26 +1217,26 @@ def run_db_dump(config, dest_root, job_status_update=True, status_tracker=None):
                         
         msg = tr("console.dbDumpSuccess", "DB Dump erfolgreich: {filename}", filename=os.path.basename(outfile))
         log_status(msg, "success")
-        add_event(msg, "success")
+        add_event(msg, "success", "cloud")
         return {"status": "success", "message": msg}
         
     except FileNotFoundError:
         err = tr("console.dbExecutableMissing", "DB Fehler: Executable für {db_type} nicht gefunden (mysqldump/pg_dump). Bitte installieren oder zu PATH hinzufügen.", db_type=db_type)
         logger.error(err)
         log_status(err, "error")
-        add_event(err, "error")
+        add_event(err, "error", "cloud")
         return {"status": "error", "message": err}
     except subprocess.CalledProcessError as e:
         err = tr("console.dbDumpExitError", "DB Dump Fehler (Exit {code})", code=e.returncode)
         logger.error(err)
         log_status(err, "error")
-        add_event(err, "error")
+        add_event(err, "error", "cloud")
         return {"status": "error", "message": err}
     except Exception as e:
         logger.error(f"DB Module Error: {e}")
         err = tr("console.dbModuleError", "DB Fehler: {error}", error=str(e))
         log_status(err, "error")
-        add_event(err, "error")
+        add_event(err, "error", "cloud")
         return {"status": "error", "message": err}
 
 # --- Kern-Backup Logik ---
@@ -1544,7 +1624,7 @@ def run_backup_logic(source, dest, comment="Automatisches Backup", custom_filena
             )
             log_status(mode_msg, "info")
 
-        add_event("console.backupStarted", "info")
+        add_event("console.backupStarted", "info", "backup")
 
         log_status(tr("backup.validating", "Validiere Pfade..."), "debug")
         is_multi_file = "|" in source
@@ -2675,7 +2755,7 @@ def auto_backup_scheduler():
     """Hintergrund-Thread, der die Zeitintervalle überwacht."""
     # Kurze Start-Verzögerung, damit System bereit ist
     time.sleep(3)
-    add_event("console.autoSchedulerStarted", "info")
+    add_event("console.autoSchedulerStarted", "info", "scheduler")
     
     last_backup_time = time.time()
     
@@ -2697,7 +2777,7 @@ def auto_backup_scheduler():
                         logger.debug("Auto-Backup deferred: Backup in progress.")
                     else:
                         logger.info("Auto-Backup: Intervall erreicht. Starte Prozess.")
-                        add_event(tr("console.autoSchedulerGlobalStart", "Auto-Scheduler: Starte Globales Backup..."), "info")
+                        add_event(tr("console.autoSchedulerGlobalStart", "Auto-Scheduler: Starte Globales Backup..."), "info", "scheduler")
                         res = run_backup_logic(source, dest, "System Auto-Snapshot")
                         if res.get("status") == "success":
                             last_backup_time = time.time()
@@ -2729,11 +2809,11 @@ def auto_backup_scheduler():
                         if is_backup_locked():
                             # Retry next loop
                             logger.info(f"Task '{t_name}' deferred: Backup in progress.")
-                            add_event(tr("console.schedulerTaskDeferred", "Scheduler: Task '{name}' verschoben (Backup läuft bereits)", name=t_name), "warning")
+                            add_event(tr("console.schedulerTaskDeferred", "Scheduler: Task '{name}' verschoben (Backup läuft bereits)", name=t_name), "warning", "scheduler")
                             continue
                             
                         logger.info(f"Task Auto-Backup: '{t_name}' fällig. Starte...")
-                        add_event(tr("console.autoSchedulerTaskStart", "Auto-Scheduler: Starte Task '{name}'...", name=t_name), "info")
+                        add_event(tr("console.autoSchedulerTaskStart", "Auto-Scheduler: Starte Task '{name}'...", name=t_name), "info", "scheduler")
                         try:
                             # Prepare Task Options
                             task_opts = {
@@ -2747,10 +2827,10 @@ def auto_backup_scheduler():
                                 tasks_modified = True
                                 any_backup_ran = True
                             else:
-                                add_event(tr("console.schedulerTaskNotRun", "Task '{name}' nicht ausgeführt: {reason}", name=t_name, reason=res.get('message')), "warning")
+                                add_event(tr("console.schedulerTaskNotRun", "Task '{name}' nicht ausgeführt: {reason}", name=t_name, reason=res.get('message')), "warning", "scheduler")
                         except Exception as e:
                             logger.error(f"Fehler bei Task Backup '{t_name}': {e}")
-                            add_event(tr("console.schedulerTaskError", "Scheduler Fehler bei '{name}': {error}", name=t_name, error=str(e)), "error")
+                            add_event(tr("console.schedulerTaskError", "Scheduler Fehler bei '{name}': {error}", name=t_name, error=str(e)), "error", "scheduler")
             
             if tasks_modified:
                 # Sicherer Update-Mechanismus
@@ -2774,12 +2854,12 @@ def auto_backup_scheduler():
                     
                     current_conf_fresh["tasks"] = fresh_tasks
                     if save_config(current_conf_fresh):
-                         add_event(tr("console.schedulerStatusUpdated", "Scheduler: Task-Status aktualisiert."), "success")
+                         add_event(tr("console.schedulerStatusUpdated", "Scheduler: Task-Status aktualisiert."), "success", "scheduler")
                     else:
-                         add_event(tr("console.schedulerStatusUpdateFailed", "Scheduler: Konnte Task-Status nicht speichern!"), "error")
+                         add_event(tr("console.schedulerStatusUpdateFailed", "Scheduler: Konnte Task-Status nicht speichern!"), "error", "scheduler")
                 except Exception as ex:
                     logger.error(f"Fehler beim Speichern der Task-Updates: {ex}")
-                    add_event(tr("console.schedulerSaveError", "Scheduler Save Error: {error}", error=str(ex)), "error")
+                    add_event(tr("console.schedulerSaveError", "Scheduler Save Error: {error}", error=str(ex)), "error", "scheduler")
             
             # Auto-Shutdown Check Removed
 
@@ -3420,6 +3500,9 @@ HTML_TEMPLATE = """
                              <option value="100">100</option>
                              <option value="all" data-i18n="dashboard.limitAll">Alle</option>
                          </select>
+                         <button onclick="window.prevHistoryPage()" class="text-[10px] font-black uppercase bg-white/5 border border-white/10 px-2 py-1 rounded text-slate-300 hover:bg-white/10 transition-all">&lt;</button>
+                         <span id="history-page-label" class="text-[10px] font-mono text-slate-500 min-w-[40px] text-center"></span>
+                         <button onclick="window.nextHistoryPage()" class="text-[10px] font-black uppercase bg-white/5 border border-white/10 px-2 py-1 rounded text-slate-300 hover:bg-white/10 transition-all">&gt;</button>
                     </div>
                 </div>
 
@@ -4329,9 +4412,9 @@ HTML_TEMPLATE = """
         let globalHistory = [];
         let currentDiskUsedPercent = 0;
         
-        // --- Central Limit Initialization (Synchronous) ---
-        // Initializes from localStorage immediately to ensure stability
+        // --- Central Limit & Paging ---
         let currentLimit = 10;
+        let currentPage = 1;
         try {
             const saved = localStorage.getItem('backup_pro_limit');
             if(saved) currentLimit = saved === 'all' ? 999999 : parseInt(saved);
@@ -4351,9 +4434,28 @@ HTML_TEMPLATE = """
             const val = document.getElementById('history-limit').value;
             currentLimit = val === 'all' ? 999999 : parseInt(val);
             localStorage.setItem('backup_pro_limit', val);
+            currentPage = 1;
             const label = (val === 'all' ? t("dashboard.limitAll", "Alle") : val);
             addLog(t("console.limitChanged", "Limit geändert: ") + label, "info");
             updateDashboardDisplays();
+        };
+
+        window.nextHistoryPage = function() {
+            const totalItems = globalHistory.length;
+            if (!totalItems || currentLimit <= 0 || currentLimit === 999999) return;
+            const totalPages = Math.max(1, Math.ceil(totalItems / currentLimit));
+            if (currentPage < totalPages) {
+                currentPage += 1;
+                updateDashboardDisplays();
+            }
+        };
+
+        window.prevHistoryPage = function() {
+            if (currentLimit <= 0 || currentLimit === 999999) return;
+            if (currentPage > 1) {
+                currentPage -= 1;
+                updateDashboardDisplays();
+            }
         };
 
         window.applySort = function() {
@@ -5277,8 +5379,27 @@ HTML_TEMPLATE = """
             storageChart.data.datasets[0].backgroundColor = [];
             storageChart.data.datasets[0].borderColor = [];
 
-            // Apply Limit for Display
-            const displayData = globalHistory.slice(0, currentLimit);
+            const totalItems = globalHistory.length;
+            let displayData = globalHistory;
+            if (currentLimit > 0 && currentLimit !== 999999 && totalItems > 0) {
+                const totalPages = Math.max(1, Math.ceil(totalItems / currentLimit));
+                if (currentPage > totalPages) currentPage = totalPages;
+                const startIdx = (currentPage - 1) * currentLimit;
+                const endIdx = startIdx + currentLimit;
+                displayData = globalHistory.slice(startIdx, endIdx);
+            } else {
+                currentPage = 1;
+            }
+
+            const pageLabel = document.getElementById('history-page-label');
+            if (pageLabel) {
+                if (currentLimit === 999999 || totalItems === 0) {
+                    pageLabel.innerText = "";
+                } else {
+                    const totalPages = Math.max(1, Math.ceil(totalItems / currentLimit));
+                    pageLabel.innerText = currentPage + " / " + totalPages;
+                }
+            }
             const now = new Date();
             const indexedDisplay = displayData.map(e => ({ entry: e, idx: globalHistory.indexOf(e) }));
             const ageSorted = [...indexedDisplay].sort((a, b) => {
@@ -7603,6 +7724,32 @@ def run_async_reindex(dest):
         logger.error(f"Async Re-Index Fehler: {e}")
     finally:
         reindexing_active = False
+
+@app.route("/api/health")
+def api_health():
+    """Gibt den Gesundheitsstatus und die Version zurück."""
+    return jsonify({"status": "ok", "version": "7.4.0"})
+
+@app.route("/api/stats")
+def api_stats():
+    """Liefert kompakte Statistiken für Dashboards."""
+    history = get_history_from_db()
+    count = len(history)
+    last_backup = "N/A"
+    last_size = 0
+    
+    if count > 0:
+        # History ist per Default DESC sortiert
+        last_entry = history[0]
+        last_backup = last_entry.get("timestamp", "N/A")
+        last_size = last_entry.get("size", 0)
+        
+    return jsonify({
+        "snapshot_count": count,
+        "last_backup_timestamp": last_backup,
+        "last_backup_size": last_size,
+        "version": "7.4.0"
+    })
 
 @app.route("/api/get_history")
 def get_history_api():
