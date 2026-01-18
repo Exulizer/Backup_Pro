@@ -14,129 +14,104 @@ Es wurde entwickelt, um Projekte und wichtige Verzeichnisse nicht nur zu archivi
 
 ---
 
-## **✨ NEUE FEATURES (v7.4 Hybrid Kernel)**
+## **✨ Hauptfunktionen (Highlights)**
 
-### 🌐 Bilinguales Interface & Logs
-- Vollständig zweisprachige Oberfläche (Deutsch/Englisch) inkl. Konsole, Auto-Scheduler und Cloud-Logs.
-- Sprachumschalt-Button zeigt klar die aktuell aktive Sprache an.
-- Alle Cloud-SFTP-Meldungen (Erfolg, Fehler, „Host oder User fehlt“) sind nun übersetzt und konsistent.
+### 🛡️ **Maximale Sicherheit**
+- **AES-256 Verschlüsselung:** Optionaler Schutz aller Archive mit Industriestandard.
+- **Retention Lock:** Sperren Sie wichtige Backups, um sie vor der automatischen Rotation zu schützen.
+- **Integritäts-Check:** SHA256-Signaturen und Deep Scans garantieren unveränderte Daten.
 
-### 🧩 Tasks & Bedienung
-- „Keine Tasks vorhanden“ und der Standard-Taskname sind sprachabhängig und werden korrekt umgeschaltet.
-- Verbesserte Statusanzeige: Kein „undefined%“ mehr nach Abbruch, Fortschritt bleibt sauber.
-- Speichern-Buttons zeigen klaren Status (Speichert…, Erfolgreich gespeichert, Fehler) in der gewählten Sprache.
+### 🌐 **Hybrid Cloud & Konnektivität**
+- **SFTP Integration:** Automatischer Upload verschlüsselter Container auf entfernte Server.
+- **Offsite-Sicherung:** Schutz bei physischem Hardware-Ausfall.
+- **Smart Connection:** Robustes Verbindungshandling auch bei instabilem Internet.
 
-## **✨ NEUE FEATURES (v7.3 Hybrid Kernel)**
-
-### 🕵️ **Snapshot Inspektor 2.0**
-- **Deep Scan Engine:** Überprüfen Sie die Bit-Integrität Ihrer Archive nachträglich per Hash-Vergleich.
-- **Content Preview:** Sehen Sie den Inhalt von ZIP-Dateien direkt im Browser, ohne sie wiederherstellen zu müssen.
-- **Retention Lock:** Sperren Sie wichtige Backups ("Lock"), damit sie niemals automatisch durch die Rotation gelöscht werden.
-- **Metadaten-Editor:** Fügen Sie Kommentare zu alten Backups hinzu oder bearbeiten Sie diese.
-- **Smart Sorting:** Sortieren Sie Snapshots chronologisch oder nach Größe (aufsteigend/absteigend).
-- **History Cleanup:** Entfernen Sie alte Einträge aus der Liste, während die physischen Dateien sicher erhalten bleiben.
+### �️ **Snapshot Inspektor 2.0**
+- **Content Preview:** Durchsuchen Sie ZIP-Inhalte direkt im Browser ohne Restore.
+- **Metadaten-Editor:** Fügen Sie Kommentare zu Backups hinzu.
+- **Smart Sorting & Cleanup:** Verwalten Sie Ihre Backup-Historie effizient.
 
 ### 🚀 **Performance & UX**
-- **Enhanced Dashboard:** Neue Detailanzeigen für "Archive Volume" (Total Snapshots) und "Change Delta" (File Count Details).
-- **Smart Scaling:** Intelligente Anzeige von Dateigrößen (automatische Umschaltung KB/MB/GB).
-- **Lazy Loading Core:** Startet bis zu 40% schneller durch bedarfsgerechtes Laden von Bibliotheken.
-
-## **✨ FEATURES (v7.2 Update)**
-
-### 🛑 **Smart Cancel & Safety**
-- **Abbruch-Button:** Laufende Backups können jetzt jederzeit sicher abgebrochen werden.
-- **Auto-Cleanup:** Bei Abbruch werden unvollständige ZIP-Dateien automatisch entfernt, um Speicherplatz zu sparen.
-- **Multi-File Support:** Wählen Sie jetzt mehrere einzelne Dateien aus verschiedenen Orten für ein gemeinsames Backup aus.
-
-### 📘 **Verbesserte Usability**
-- **Einsteiger-Handbuch:** Integrierte Schritt-für-Schritt-Anleitung direkt in der App.
-- **Klartext-Menü:** "Dashboard" heißt jetzt "ZENTRALE" für bessere Orientierung.
-- **Cloud-Optimierung:** Separates Feld für SFTP-Hostadressen behebt Verbindungsprobleme.
+- **Bilingual (DE/EN):** Vollständig lokalisierte Oberfläche, umschaltbar per Klick.
+- **Async Core:** Backups laufen im Hintergrund, die UI bleibt reaktionsschnell.
+- **Lazy Loading:** Bis zu 40% schnellerer Start durch optimiertes Ressourcen-Management.
 
 ---
 
-## **✨ FEATURES (v7.1)**
-
-### 🔒 **Military-Grade Security**
-- **AES-256 Verschlüsselung:** Alle Backups können optional mit dem AES-256 Standard verschlüsselt werden.
-- **Passwortschutz:** Ohne Ihr Passwort sind die Archive für Dritte wertlos.
-
-### ☁️ **Cloud Connect**
-- **SFTP Integration:** Laden Sie Ihre verschlüsselten Backups automatisch auf entfernte Server hoch.
-- **Offsite-Sicherung:** Schützt Ihre Daten auch bei physischem Verlust des lokalen Rechners.
-
-### ⚡ **High-Performance Core**
-- **Asynchrone Engine:** Backups laufen im Hintergrund, ohne die Benutzeroberfläche zu blockieren.
-- **Smart Chunking:** Optimierte Verarbeitung großer Dateien für maximale Geschwindigkeit.
-- **Auto-Update Launcher:** Das System erkennt automatisch neue Versionen im Ordner und startet immer die aktuellste.
-
----
-
-## **💎 CLASSIC FEATURES**
-
-- **Snapshot-Engine:** Schnelle ZIP-Komprimierung.
-- **Integritäts-Protokoll:** SHA256-Signaturen garantieren unveränderte Daten.
-- **One-Click Restore:** Wiederherstellung direkt an den Ursprungsort.
-- **Live-Telemetrie:** Echtzeit-Überwachung von I/O und Systemstatus.
-- **Retention Policy:** Automatische Löschung alter Backups (Rotation).
-
----
-
-## **🚀 INSTALLATION (Empfohlen)**
+## **🚀 Installation & Start**
 
 Wir haben die Installation radikal vereinfacht. Sie benötigen **kein Vorwissen** über Python oder Git.
 
-### **1. Schnellstart**
+### **1. Installation**
 1. Laden Sie die **`install_backup_pro`** ZIP-Datei herunter und entpacken Sie diese.
-2. In dem Ordner finden Sie **`setup.bat`** und **`install_backup_pro.py`**.
-3. Starten Sie **`setup.bat`**.
-   - *Der Installer prüft automatisch, ob Python installiert ist.*
-   - *Er erstellt selbstständig eine isolierte Umgebung (`.venv`).*
-4. Im Installer-Fenster:
-   - Klicken Sie auf **"Download App"**, um die neueste Version direkt von GitHub zu laden.
-   - Klicken Sie auf **"Installation Starten"**.
+2. Starten Sie **`setup.bat`**.
+   - *Der Installer prüft Python, erstellt eine isolierte Umgebung (`.venv`) und lädt alle Abhängigkeiten.*
+   - Wählen Sie im Installer **"Download App"** und dann **"Installation Starten"**.
 
 ### **2. Starten**
 - Nutzen Sie das neu erstellte **Desktop-Icon "Backup Pro"**.
-- Oder starten Sie **`start_backup_pro.bat`**.
+- Oder starten Sie manuell die **`start_backup_pro.bat`**.
+
+> **Hinweis:** Das Dashboard öffnet sich automatisch in Ihrem Standard-Browser (Standard: `http://127.0.0.1:5000`).
 
 ---
 
-## **🔄 UPDATES (Sorglos-System)**
+## **🆕 Aktuelles Update (v7.4 Hybrid Kernel)**
 
-Dank des intelligenten Launchers ist das Aktualisieren kinderleicht:
+Der Fokus dieses Updates lag auf **Internationalisierung** und **Konsistenz**.
 
-1. Laden Sie einfach die neue Programmdatei (z.B. `backup_app_v7_2.py`) herunter.
-2. Legen Sie sie in denselben Ordner wie die alte Version.
-3. Starten Sie Backup Pro wie gewohnt.
-   - **Der Launcher erkennt automatisch die neuere Version und startet diese.**
-   - Keine Neuinstallation nötig!
+- **🌐 Bilinguales Interface:** Vollständige Übersetzung (DE/EN) für Konsole, Scheduler und Logs.
+- **🧩 Smarte UI-Elemente:** Sprachabhängige Platzhalter ("Keine Tasks") und Status-Buttons.
+- **🔧 Fehlerbehebung:** Konsistente Fehlermeldungen bei SFTP-Verbindungen in der gewählten Sprache.
 
 ---
 
-## **🛠️ KONFIGURATION**
+## **🔄 Updates & Wartung**
 
-Das Dashboard öffnet sich automatisch in Ihrem Standard-Browser (meist unter **http://127.0.0.1:5000**). Sollte der Port belegt sein, wählt das System automatisch einen freien Alternativ-Port.
+Das **Sorglos-System** macht Updates kinderleicht:
+1. Laden Sie die neue Programmdatei (z.B. `backup_app_v7_5.py`) herunter.
+2. Legen Sie sie in den Installationsordner.
+3. Starten Sie Backup Pro neu – der **Launcher erkennt automatisch die neueste Version**.
+
+---
+
+## **🛠️ Konfiguration**
 
 ### **Verschlüsselung aktivieren**
 1. Gehen Sie auf **"Parameter"**.
-2. Aktivieren Sie **"AES-256 Verschlüsselung nutzen"**.
-3. Setzen Sie ein sicheres **Passwort**.
+2. Aktivieren Sie **"AES-256 Verschlüsselung nutzen"** und setzen Sie ein Passwort.
 
-### **Cloud Backup einrichten**
+### **Cloud Backup (SFTP)**
 1. Unter **"Parameter"** -> **"Cloud Upload (SFTP)"**.
 2. Tragen Sie Host, Benutzer, Passwort und Zielpfad ein.
-3. *Neu in v7.2: Nutzen Sie das dedizierte "Server Host"-Feld für maximale Kompatibilität.*
 
 ---
 
-Copyright &copy; 2025 Exulizer
+<details>
+<summary><strong>📜 Änderungshistorie (Ältere Versionen)</strong></summary>
+
+### **v7.3 (Snapshot Inspector)**
+- **Deep Scan Engine:** Bit-Integrität per Hash prüfen.
+- **Content Preview:** ZIP-Inhalte im Browser ansehen.
+- **History Cleanup:** Bereinigung der Datenbank ohne Dateiverlust.
+
+### **v7.2 (Smart Cancel)**
+- **Abbruch-Button:** Sicheres Stoppen laufender Backups.
+- **Auto-Cleanup:** Entfernt unvollständige Dateien automatisch.
+- **Multi-File Support:** Sichern einzelner Dateien aus verschiedenen Orten.
+
+### **v7.1 (Core)**
+- **High-Performance Core:** Asynchrone Engine.
+- **Smart Chunking:** Optimiert für große Dateien.
+- **Auto-Update Launcher:** Startet immer die neuste Version.
+
+</details>
 
 ---
 
 ## ☕ Support the Project
 
-Gefällt Ihnen **Backup OS Pro**? Helfen Sie mit, die Entwicklung voranzutreiben! Jede Unterstützung fließt direkt in neue Features und Updates.
+Gefällt Ihnen **Backup OS Pro**? Helfen Sie mit, die Entwicklung voranzutreiben! Jede Unterstützung fließt direkt in neue Features.
 
 <a href="https://buymeacoffee.com/exulizer" target="_blank">
   <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" >
@@ -144,4 +119,7 @@ Gefällt Ihnen **Backup OS Pro**? Helfen Sie mit, die Entwicklung voranzutreiben
 
 ---
 
-License This project is licensed under a proprietary license. You are free to use it for personal use, but modifications and redistribution are strictly prohibited. See the LICENSE file for the full legal text.
+### License
+This project is licensed under a proprietary license. You are free to use it for personal use, but modifications and redistribution are strictly prohibited. See the LICENSE file for the full legal text.
+
+Copyright &copy; 2026 Exulizer
