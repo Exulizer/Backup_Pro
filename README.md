@@ -69,9 +69,10 @@ Der Fokus dieses Updates lag auf **Internationalisierung** und **Konsistenz**.
 ## **🔄 Updates & Wartung**
 
 Das **Sorglos-System** macht Updates kinderleicht:
-1. Laden Sie die neue Programmdatei (z.B. `backup_app_v7_5.py`) herunter.
-2. Legen Sie sie in den Installationsordner.
-3. Starten Sie Backup Pro neu – der **Launcher erkennt automatisch die neueste Version**.
+1. Starten Sie einfach den **Backup Pro Installer** (oder nutzen Sie die Update-Funktion im Dashboard).
+2. Der Installer lädt automatisch die **neueste Version** herunter und installiert sie.
+3. Beim nächsten Start wählt der Launcher automatisch die aktuellste Version.
+
 
 ---
 
