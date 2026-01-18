@@ -64,7 +64,8 @@ class EndpointFilter(logging.Filter):
             "/api/scan_progress",
             "/api/stream",
             "/api/stats",
-            "/api/health"
+            "/api/health",
+            "/api/integrity_status"
         ]
         if any(endpoint in msg for endpoint in ignored_endpoints) and " 200 " in msg:
             return False
@@ -113,6 +114,8 @@ cloud_job_status = {
     "result": None
 }
 backup_lock = threading.RLock()
+
+auto_scheduler_last_global_run = None
 
 def is_backup_locked():
     """Helper to check if RLock is locked by another thread."""
@@ -480,6 +483,72 @@ def toggle_lock_in_db(filename):
     except Exception as e:
         logger.error(f"DB Toggle Lock Error: {e}")
         return False, False
+
+def compute_integrity_status():
+    status = {
+        "ok": False,
+        "total_db_entries": 0,
+        "verified_files": 0,
+        "missing_files": 0,
+        "orphaned_files": 0,
+        "backup_path": None,
+    }
+    conn = None
+    try:
+        if not os.path.exists(CONFIG_FILE):
+            return status
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        backup_path = cfg.get("default_dest") or ""
+        status["backup_path"] = backup_path
+        if not os.path.exists(DB_FILE):
+            return status
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute("SELECT filename, path FROM history")
+        rows = c.fetchall()
+        status["total_db_entries"] = len(rows)
+        db_filenames = set()
+        verified = 0
+        missing = 0
+        for row in rows:
+            filename = row["filename"]
+            db_filenames.add(filename)
+            stored_path = row["path"]
+            actual_path = None
+            if stored_path and os.path.exists(stored_path):
+                actual_path = stored_path
+            elif backup_path:
+                candidate = os.path.join(backup_path, filename)
+                if os.path.exists(candidate):
+                    actual_path = candidate
+            if actual_path:
+                verified += 1
+            else:
+                missing += 1
+        status["verified_files"] = verified
+        status["missing_files"] = missing
+        orphaned = 0
+        if backup_path and os.path.exists(backup_path):
+            try:
+                for name in os.listdir(backup_path):
+                    if name.lower().endswith(".zip") and name not in db_filenames:
+                        orphaned += 1
+            except Exception as e:
+                logger.error(f"Integrity orphan scan error: {e}")
+        status["orphaned_files"] = orphaned
+        status["ok"] = missing == 0
+        return status
+    except Exception as e:
+        logger.error(f"Integrity status error: {e}")
+        return status
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except:
+                pass
 
 # --- Security Module ---
 try:
@@ -2753,11 +2822,13 @@ def run_backup_logic(source, dest, comment="Automatisches Backup", custom_filena
 
 def auto_backup_scheduler():
     """Hintergrund-Thread, der die Zeitintervalle überwacht."""
+    global auto_scheduler_last_global_run
     # Kurze Start-Verzögerung, damit System bereit ist
     time.sleep(3)
     add_event("console.autoSchedulerStarted", "info", "scheduler")
     
     last_backup_time = time.time()
+    auto_scheduler_last_global_run = last_backup_time
     
     while True:
         try:
@@ -2781,6 +2852,7 @@ def auto_backup_scheduler():
                         res = run_backup_logic(source, dest, "System Auto-Snapshot")
                         if res.get("status") == "success":
                             last_backup_time = time.time()
+                            auto_scheduler_last_global_run = last_backup_time
                             any_backup_ran = True
             
             # 2. Task Specific Auto Backup
@@ -3178,6 +3250,11 @@ HTML_TEMPLATE = """
             <div onclick="switchTab('help')" id="nav-help" class="sidebar-item px-6 py-4 flex items-center gap-4 text-slate-500 border-t border-white/5 mt-4">
                 <span class="text-sm font-bold font-mono text-blue-400" data-i18n="nav.help">?? HANDBUCH</span>
             </div>
+            
+            <div onclick="openBugReportModal()" class="sidebar-item px-6 py-4 flex items-center gap-3 text-slate-500 cursor-pointer hover:bg-white/5 transition-colors" title="Bug auf GitHub melden" data-i18n-title="nav.bugreportTitle">
+                <span class="text-[11px] text-red-400">🐜</span>
+                <span class="text-sm font-bold font-mono text-slate-300" data-i18n="nav.bugreport">Fehler melden</span>
+            </div>
         </nav>
 
         <div class="p-6 bg-[#08090d] border-t border-[#1a1e2a]">
@@ -3293,6 +3370,13 @@ HTML_TEMPLATE = """
                             <div class="health-mini-bar"><div id="bar-disk" class="health-mini-fill" style="width: 0%"></div></div>
                         </div>
                     </div>
+                    <div class="mt-3 flex items-center justify-between">
+                        <span class="text-[9px] uppercase text-slate-500 font-bold" data-i18n="dashboard.integrityLabel">System Integrität</span>
+                        <div class="flex items-center gap-2">
+                            <span id="integrity-dot" class="w-2 h-2 rounded-full bg-slate-600"></span>
+                            <span id="integrity-text" class="text-[10px] font-mono text-slate-400">--</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="commander-module p-5 relative group">
@@ -3364,7 +3448,6 @@ HTML_TEMPLATE = """
                 </div>
             </div>
 
-            <!-- Backup Success/Activity Chart -->
             <div class="commander-module p-6">
                 <div class="flex justify-between items-end mb-6">
                     <div>
@@ -3389,6 +3472,25 @@ HTML_TEMPLATE = """
                     <div class="absolute inset-0 flex items-center justify-center text-xs text-slate-600 font-mono">
                         Lade Statistik...
                     </div>
+                </div>
+            </div>
+
+            <div class="commander-module p-5">
+                <div class="flex justify-between items-center mb-3">
+                    <div>
+                        <span class="text-[11px] uppercase font-black text-slate-500 tracking-widest" data-i18n="dashboard.planTitle">Backup-Planer</span>
+                        <p class="text-[10px] text-slate-500 mt-1" data-i18n="dashboard.planDesc">Zeigt, wann das nächste automatische Backup geplant ist.</p>
+                    </div>
+                    <div class="text-[10px] font-mono text-slate-500">
+                        <span data-i18n="dashboard.planIntervalLabel">Intervall</span>:
+                        <span id="backup-plan-interval">--</span>
+                    </div>
+                </div>
+                <div id="backup-plan-box" class="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2">
+                    <div class="text-[10px] font-black uppercase text-slate-500">
+                        <span id="backup-plan-status" data-i18n="dashboard.nextBackupLabel">Nächstes Backup</span>:
+                    </div>
+                    <div class="text-sm font-mono text-blue-400" id="backup-plan-next">--</div>
                 </div>
             </div>
 
@@ -4542,33 +4644,46 @@ HTML_TEMPLATE = """
         }
 
         function updateNamingPreview() {
-            const custom = document.getElementById('config-naming-custom').value;
-            const incDate = document.getElementById('config-naming-date').checked;
-            const incTime = document.getElementById('config-naming-time').checked;
-            const incSeq = document.getElementById('config-naming-seq').checked;
-            
-            const now = new Date();
-            const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
-            const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
-            
-            let parts = [];
-            if(custom) parts.push(custom);
-            if(incDate) parts.push(dateStr);
-            if(incTime) parts.push(timeStr);
-            if(incSeq) {
-                const seqVal = document.getElementById('config-naming-seq-val').value || "1";
-                // Pad to 3 digits
-                let s = seqVal.toString();
-                while(s.length < 3) s = "0" + s;
-                parts.push(s);
+            try {
+                const elCustom = document.getElementById('config-naming-custom');
+                const elDate = document.getElementById('config-naming-date');
+                const elTime = document.getElementById('config-naming-time');
+                const elSeq = document.getElementById('config-naming-seq');
+                const elSeqVal = document.getElementById('config-naming-seq-val');
+                const elPreview = document.getElementById('naming-preview');
+
+                if (!elPreview) return;
+
+                const custom = elCustom ? elCustom.value : "";
+                const incDate = elDate ? elDate.checked : true;
+                const incTime = elTime ? elTime.checked : true;
+                const incSeq = elSeq ? elSeq.checked : false;
+
+                const now = new Date();
+                const dateStr = now.toISOString().split('T')[0];
+                const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
+
+                let parts = [];
+                if (custom) parts.push(custom);
+                if (incDate) parts.push(dateStr);
+                if (incTime) parts.push(timeStr);
+                if (incSeq) {
+                    const rawSeq = elSeqVal ? elSeqVal.value : "1";
+                    const seqVal = rawSeq || "1";
+                    let s = seqVal.toString();
+                    while (s.length < 3) s = "0" + s;
+                    parts.push(s);
+                }
+
+                if (parts.length === 0) {
+                    parts.push("backup");
+                    parts.push(dateStr + "_" + timeStr);
+                }
+
+                elPreview.innerText = parts.join('_') + ".zip";
+            } catch (e) {
+                console.error("Naming Preview Error:", e);
             }
-            
-            if(parts.length === 0) {
-                parts.push("backup");
-                parts.push(dateStr + "_" + timeStr);
-            }
-            
-            document.getElementById('naming-preview').innerText = parts.join('_') + ".zip";
         }
 
         async function loadConfigUI() {
@@ -4723,6 +4838,14 @@ HTML_TEMPLATE = """
             document.getElementById('nav-' + tabId).classList.add('active');
             if(tabId === 'dashboard' && storageChart) {
                 setTimeout(() => { storageChart.resize(); storageChart.update(); }, 100);
+            }
+        }
+
+        function openBugReportModal() {
+            try {
+                window.open('https://github.com/Exulizer/Backup_Pro/issues', '_blank');
+            } catch (e) {
+                console.error("BugReport Open Error:", e);
             }
         }
 
@@ -5252,7 +5375,7 @@ HTML_TEMPLATE = """
             
             const width = container.clientWidth || 800;
             const height = container.clientHeight || 192;
-            const padding = 65; // Mehr Abstand für Y-Achsen-Labels
+            const padding = 65;
             const chartW = width - (padding * 2);
             const chartH = height - (padding * 2);
 
@@ -5270,7 +5393,14 @@ HTML_TEMPLATE = """
                 const y = height - padding - ((val / maxVal) * chartH);
                 const stats = dailyStats[label];
                 const hasBackup = stats.count > 0;
-                return { x, y, val, date: label, count: stats.count, hasBackup };
+                let prettyDate = label;
+                try {
+                    const parts = label.split('-');
+                    if (parts.length === 3) {
+                        prettyDate = `${parts[2]}.${parts[1]}.${parts[0]}`;
+                    }
+                } catch(e) {}
+                return { x, y, val, date: label, prettyDate, count: stats.count, hasBackup };
             });
 
             // Berechne Bezier-Kontrollpunkte für smooth curves
@@ -5312,6 +5442,22 @@ HTML_TEMPLATE = """
             const gridColor = '#ffffff';
             const textColor = '#94a3b8';
 
+            const lang = (window.BP_LANG || 'de').toLowerCase();
+            const xAxisLabel = lang === 'en' ? 'Date' : 'Datum';
+            const yAxisLabel = lang === 'en' ? `Volume (${globalUnit})` : `Volumen (${globalUnit})`;
+
+            const xTicksSvg = labels.map((label, idx) => {
+                let tickText = label;
+                try {
+                    const parts = label.split('-');
+                    if (parts.length === 3) {
+                        tickText = `${parts[2]}.${parts[1]}.`;
+                    }
+                } catch(e) {}
+                const x = padding + (idx / Math.max(labels.length - 1, 1)) * chartW;
+                return `<text x="${x}" y="${height - padding + 18}" fill="${textColor}" font-size="9" text-anchor="middle">${tickText}</text>`;
+            }).join('');
+
             const svg = `
             <svg width="100%" height="100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
                 <defs>
@@ -5320,19 +5466,18 @@ HTML_TEMPLATE = """
                         <stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/>
                     </linearGradient>
                 </defs>
-                <!-- Grid Lines -->
                 <line x1="${padding}" y1="${height-padding}" x2="${width-padding}" y2="${height-padding}" stroke="${gridColor}" stroke-opacity="0.1" stroke-width="1" />
                 <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height-padding}" stroke="${gridColor}" stroke-opacity="0.1" stroke-width="1" />
                 <line x1="${padding}" y1="${midY}" x2="${width-padding}" y2="${midY}" stroke="${gridColor}" stroke-opacity="0.05" stroke-width="1" stroke-dasharray="4 4" />
                 <line x1="${padding}" y1="${padding}" x2="${width-padding}" y2="${padding}" stroke="${gridColor}" stroke-opacity="0.05" stroke-width="1" stroke-dasharray="4 4" />
                 
-                <!-- Axis Labels -->
-                <text x="${padding}" y="${height - padding + 20}" fill="${textColor}" font-size="10" text-anchor="middle">${labels[0]}</text>
-                <text x="${width - padding}" y="${height - padding + 20}" fill="${textColor}" font-size="10" text-anchor="middle">${labels[labels.length-1]}</text>
-                
                 <text x="${padding - 12}" y="${height - padding + 4}" fill="${textColor}" font-size="10" text-anchor="end">0</text>
                 <text x="${padding - 12}" y="${midY + 4}" fill="${textColor}" font-size="10" text-anchor="end">${formatSize(maxVal/2)}</text>
                 <text x="${padding - 12}" y="${padding + 4}" fill="${textColor}" font-size="10" text-anchor="end">${formatSize(maxVal)}</text>
+
+                ${xTicksSvg}
+                <text x="${width / 2}" y="${height - 8}" fill="${textColor}" font-size="10" text-anchor="middle">${xAxisLabel}</text>
+                <text x="${padding - 65}" y="${height / 2}" fill="${textColor}" font-size="9" text-anchor="middle" transform="rotate(-90 ${padding - 65} ${height / 2})">${yAxisLabel}</text>
 
                 <path d="${areaD}" fill="url(#chartGradient)" stroke="none" />
                 <path d="${pathD}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -5341,9 +5486,10 @@ HTML_TEMPLATE = """
                         <circle cx="${p.x}" cy="${p.y}" r="4" fill="#1e293b" stroke="${p.hasBackup ? '#22c55e' : '#ef4444'}" stroke-width="2" class="cursor-pointer transition-all duration-300 group-hover/point:r-6 group-hover/point:fill-white" />
                         <foreignObject x="${Math.min(Math.max(0, p.x - 75), width - 150)}" y="${Math.max(0, p.y - 80)}" width="150" height="70" class="opacity-0 group-hover/point:opacity-100 transition-opacity pointer-events-none overflow-visible">
                             <div xmlns="http://www.w3.org/1999/xhtml" class="bg-[#0f111a] text-xs rounded-lg p-3 border border-blue-500/30 shadow-2xl shadow-blue-900/20">
-                                <div class="font-bold text-slate-200 mb-1 border-b border-white/5 pb-1">${p.date}</div>
-                                <div class="flex justify-between"><span class="text-slate-500">Vol:</span><span class="text-blue-400 font-mono">${formatSize(p.val)}</span></div>
-                                <div class="flex justify-between"><span class="text-slate-500">${p.hasBackup ? 'Erfolgreiche' : 'Erfolgreiche'}</span><span class="text-emerald-400 font-mono">${p.count}</span></div>
+                                <div class="font-bold text-slate-200 mb-1 border-b border-white/5 pb-1">${p.prettyDate}</div>
+                                <div class="flex justify-between"><span class="text-slate-500">Datum:</span><span class="text-slate-300 font-mono">${p.date}</span></div>
+                                <div class="flex justify-between"><span class="text-slate-500">Volumen:</span><span class="text-blue-400 font-mono">${formatSize(p.val)}</span></div>
+                                <div class="flex justify-between"><span class="text-slate-500">Backups:</span><span class="text-emerald-400 font-mono">${p.count}</span></div>
                                 <div class="flex justify-between"><span class="text-slate-500">Status:</span><span class="font-mono ${p.hasBackup ? 'text-emerald-400' : 'text-red-400'}">${p.hasBackup ? 'Tag mit Backup' : 'Kein Backup'}</span></div>
                             </div>
                         </foreignObject>
@@ -6292,56 +6438,60 @@ HTML_TEMPLATE = """
         }
 
         async function saveProfile() {
+            const getVal = (id) => { const el = document.getElementById(id); return el ? el.value : ""; };
+            const getCheck = (id) => { const el = document.getElementById(id); return el ? el.checked : false; };
+            const getInt = (id, def) => { const val = parseInt(getVal(id)); return isNaN(val) ? def : val; };
+
             const conf = { 
-                default_source: document.getElementById('config-source').value, 
-                default_dest: document.getElementById('config-dest').value, 
-                retention_count: parseInt(document.getElementById('config-retention').value),
-                auto_interval: parseInt(document.getElementById('config-auto-interval').value) || 0,
+                default_source: getVal('config-source'), 
+                default_dest: getVal('config-dest'), 
+                retention_count: getInt('config-retention', 10),
+                auto_interval: getInt('config-auto-interval', 0),
                 auto_backup_enabled: autoBackupEnabled,
                 // Cloud Settings
-                cloud_sync_enabled: document.getElementById('config-cloud-enabled').checked,
-                cloud_provider: document.getElementById('config-cloud-provider').value,
-                cloud_direction: document.getElementById('config-cloud-direction') ? document.getElementById('config-cloud-direction').value : "upload",
-                cloud_host: document.getElementById('config-cloud-host').value,
-                cloud_port: document.getElementById('config-cloud-port').value,
-                cloud_bucket: document.getElementById('config-cloud-bucket').value,
-                cloud_region: document.getElementById('config-cloud-region').value,
-                cloud_target_path: document.getElementById('config-cloud-path').value,
-                cloud_local_path: document.getElementById('config-cloud-local-path') ? document.getElementById('config-cloud-local-path').value : "",
-                cloud_user: document.getElementById('config-cloud-user').value,
-                cloud_password: document.getElementById('config-cloud-password').value,
-                cloud_api_key: document.getElementById('config-cloud-api-key').value,
+                cloud_sync_enabled: getCheck('config-cloud-enabled'),
+                cloud_provider: getVal('config-cloud-provider'),
+                cloud_direction: getVal('config-cloud-direction') || "upload",
+                cloud_host: getVal('config-cloud-host'),
+                cloud_port: getVal('config-cloud-port'),
+                cloud_bucket: getVal('config-cloud-bucket'),
+                cloud_region: getVal('config-cloud-region'),
+                cloud_target_path: getVal('config-cloud-path'),
+                cloud_local_path: getVal('config-cloud-local-path'),
+                cloud_user: getVal('config-cloud-user'),
+                cloud_password: getVal('config-cloud-password'),
+                cloud_api_key: getVal('config-cloud-api-key'),
                 // GitHub Settings
-                github_backup_enabled: document.getElementById('config-github-enabled').checked,
-                github_url: document.getElementById('config-github-url').value,
-                github_path: document.getElementById('config-github-path').value,
-                github_token: document.getElementById('config-github-token').value,
+                github_backup_enabled: getCheck('config-github-enabled'),
+                github_url: getVal('config-github-url'),
+                github_path: getVal('config-github-path'),
+                github_token: getVal('config-github-token'),
                 // Database Settings (New)
-                db_backup_enabled: document.getElementById('config-db-enabled') ? document.getElementById('config-db-enabled').checked : false,
-                db_type: document.getElementById('config-db-type') ? document.getElementById('config-db-type').value : 'mysql',
-                db_host: document.getElementById('config-db-host') ? document.getElementById('config-db-host').value : '',
-                db_port: document.getElementById('config-db-port') ? document.getElementById('config-db-port').value : '',
-                db_user: document.getElementById('config-db-user') ? document.getElementById('config-db-user').value : '',
-                db_password: document.getElementById('config-db-password') ? document.getElementById('config-db-password').value : '',
-                db_names: document.getElementById('config-db-names') ? document.getElementById('config-db-names').value : '',
+                db_backup_enabled: getCheck('config-db-enabled'),
+                db_type: getVal('config-db-type') || 'mysql',
+                db_host: getVal('config-db-host'),
+                db_port: getVal('config-db-port'),
+                db_user: getVal('config-db-user'),
+                db_password: getVal('config-db-password'),
+                db_names: getVal('config-db-names'),
                 // Naming Settings
-                naming_custom_text: document.getElementById('config-naming-custom').value,
-                naming_include_date: document.getElementById('config-naming-date').checked,
-                naming_include_time: document.getElementById('config-naming-time').checked,
-                naming_include_seq: document.getElementById('config-naming-seq').checked,
-                naming_seq_counter: parseInt(document.getElementById('config-naming-seq-val').value) || 1,
+                naming_custom_text: getVal('config-naming-custom'),
+                naming_include_date: getCheck('config-naming-date'),
+                naming_include_time: getCheck('config-naming-time'),
+                naming_include_seq: getCheck('config-naming-seq'),
+                naming_seq_counter: getInt('config-naming-seq-val', 1),
                 // Advanced
-                compression_level: parseInt(document.getElementById('config-compression').value) || 3,
-                exclusions: document.getElementById('config-exclusions').value,
+                compression_level: getInt('config-compression', 3),
+                exclusions: getVal('config-exclusions'),
                 // Notifications
-                notify_on_success: document.getElementById('config-notify-success').checked,
-                notify_on_error: document.getElementById('config-notify-error').checked,
-                discord_webhook_url: document.getElementById('config-discord-url').value,
-                telegram_token: document.getElementById('config-telegram-token').value,
-                telegram_chat_id: document.getElementById('config-telegram-chatid').value,
+                notify_on_success: getCheck('config-notify-success'),
+                notify_on_error: getCheck('config-notify-error'),
+                discord_webhook_url: getVal('config-discord-url'),
+                telegram_token: getVal('config-telegram-token'),
+                telegram_chat_id: getVal('config-telegram-chatid'),
                 // Encryption
-                encryption_enabled: document.getElementById('config-enc-enabled').checked,
-                encryption_password: document.getElementById('config-enc-password').value
+                encryption_enabled: getCheck('config-enc-enabled'),
+                encryption_password: getVal('config-enc-password')
             };
             try {
                 const mainSaveBtn = document.querySelector('button[data-i18n="settings.saveParametersButton"]');
@@ -6369,7 +6519,12 @@ HTML_TEMPLATE = """
                     }
 
                     // Trigger re-load to update history potentially based on new path
-                    loadData();
+                    await loadData();
+                    updateNamingPreview(); // Ensure preview is correct after load
+                    
+                    if (typeof initBackupPlan === "function") {
+                        initBackupPlan();
+                    }
                 } else {
                     addLog(t("console.saveErrorUnknown", "Fehler beim Speichern: ") + (res.message || "Unbekannt"), "error", "console.saveErrorUnknown");
                     if (mainSaveBtn) {
@@ -6383,6 +6538,7 @@ HTML_TEMPLATE = """
                     }
                 }
             } catch (e) {
+                console.error(e);
                 addLog(t("console.saveCommError", "Kommunikationsfehler beim Speichern."), "error", "console.saveCommError");
                 const mainSaveBtn = document.querySelector('button[data-i18n="settings.saveParametersButton"]');
                 if (mainSaveBtn) {
@@ -7428,6 +7584,83 @@ HTML_TEMPLATE = """
                 }
             } catch(e) { console.error("Startup Check Error:", e); }
         }
+
+        async function initBackupPlan() {
+            try {
+                const box = document.getElementById('backup-plan-box');
+                const statusEl = document.getElementById('backup-plan-status');
+                const nextEl = document.getElementById('backup-plan-next');
+                const intervalEl = document.getElementById('backup-plan-interval');
+                if (!box || !statusEl || !nextEl || !intervalEl) return;
+                const resp = await fetch('/api/backup_plan');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (!data || !data.enabled || !data.next_run_ts) {
+                    statusEl.innerText = t("dashboard.nextBackupLabel", "Nächstes Backup") + ":";
+                    nextEl.innerText = t("dashboard.planDisabled", "Automatisches Backup ist deaktiviert");
+                    intervalEl.innerText = "--";
+                    return;
+                }
+                const lang = (window.BP_LANG || 'de').toLowerCase();
+                const locale = lang === 'en' ? 'en-GB' : 'de-DE';
+                let label = t("dashboard.planUnknown", "Kein Zeitplan verfügbar");
+                if (typeof data.next_run_ts === "number") {
+                    const dt = new Date(data.next_run_ts * 1000);
+                    const now = new Date();
+                    const sameDay = dt.toDateString() === now.toDateString();
+                    const timeStr = dt.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+                    if (sameDay) {
+                        const todayWord = t("dashboard.nextBackupToday", lang === 'en' ? "Today" : "Heute");
+                        label = lang === 'en' ? `${todayWord} ${timeStr}` : `${todayWord} ${timeStr} Uhr`;
+                    } else {
+                        const dateStr = dt.toLocaleDateString(locale);
+                        label = `${dateStr} ${timeStr}`;
+                    }
+                }
+                statusEl.innerText = t("dashboard.nextBackupLabel", "Nächstes Backup") + ":";
+                nextEl.innerText = label;
+                const intervalMinutes = (data.interval_minutes && data.interval_minutes > 0)
+                    ? data.interval_minutes
+                    : (data.global && data.global.interval_minutes) || 0;
+                intervalEl.innerText = intervalMinutes > 0 ? `${intervalMinutes} min` : "--";
+            } catch(e) {
+                console.error("Backup plan load failed:", e);
+            }
+        }
+
+        async function initIntegrityStatus() {
+            try {
+                const resp = await fetch('/api/integrity_status');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const dot = document.getElementById('integrity-dot');
+                const txt = document.getElementById('integrity-text');
+                if (!dot || !txt) return;
+                let key = "dashboard.integrityUnknown";
+                let dotClass = "w-2 h-2 rounded-full bg-slate-500";
+                let textClass = "text-[10px] font-mono text-slate-400";
+                if (data && typeof data.missing_files === "number" && typeof data.orphaned_files === "number") {
+                    if (data.missing_files > 0) {
+                        key = "dashboard.integrityError";
+                        dotClass = "w-2 h-2 rounded-full bg-red-500";
+                        textClass = "text-[10px] font-mono text-red-400";
+                    } else if (data.orphaned_files > 0) {
+                        key = "dashboard.integrityWarn";
+                        dotClass = "w-2 h-2 rounded-full bg-amber-500";
+                        textClass = "text-[10px] font-mono text-amber-400";
+                    } else if (typeof data.total_db_entries === "number") {
+                        key = "dashboard.integrityOk";
+                        dotClass = "w-2 h-2 rounded-full bg-emerald-500";
+                        textClass = "text-[10px] font-mono text-emerald-400";
+                    }
+                }
+                dot.className = dotClass;
+                txt.className = textClass;
+                txt.innerText = t(key, key);
+            } catch(e) {
+                console.error("Integrity status load failed:", e);
+            }
+        }
         
         function showStartupModal(tasks) {
             const listHtml = tasks.map(t => `<li class="text-blue-400 font-bold">• ${t}</li>`).join('');
@@ -7628,15 +7861,12 @@ HTML_TEMPLATE = """
                 });
             }
 
-            // Load data first to ensure loader is removed even if Chart fails
             setTimeout(() => {
                 try { loadData(); } catch(e) { console.error("LoadData failed:", e); }
                 try { loadTasks(); } catch(e) { console.error("LoadTasks failed:", e); }
-                
-                // Start SSE Connection
+                try { initIntegrityStatus(); } catch(e) { console.error("Integrity init failed:", e); }
+                try { initBackupPlan(); } catch(e) { console.error("Backup plan init failed:", e); }
                 setupSSE();
-
-                // Startup Check Delayed (6s)
                 setTimeout(initStartupCheck, 6000);
             }, 100);
             
@@ -7702,6 +7932,96 @@ def get_language():
 @app.route("/api/get_config")
 def get_config_api():
     return jsonify(load_config())
+
+@app.route("/api/backup_plan")
+def get_backup_plan():
+    try:
+        cfg = load_config()
+        now = time.time()
+        # Global schedule
+        g_enabled_cfg = bool(cfg.get("auto_backup_enabled", False))
+        g_interval_min = int(cfg.get("auto_interval", 0) or 0)
+        g_source = cfg.get("default_source") or ""
+        g_dest = cfg.get("default_dest") or ""
+        g_has_paths = bool(g_source and g_dest)
+        g_next_ts = None
+        if g_enabled_cfg and g_interval_min > 0 and g_has_paths:
+            interval_sec = g_interval_min * 60
+            base = auto_scheduler_last_global_run
+            if not isinstance(base, (int, float)) or base <= 0:
+                base = now
+            g_next_ts = base + interval_sec
+            if interval_sec > 0:
+                while g_next_ts <= now:
+                    g_next_ts += interval_sec
+
+        # Task schedules
+        tasks_cfg = cfg.get("tasks", [])
+        tasks_out = []
+        earliest_ts = g_next_ts
+        earliest_interval_min = g_interval_min if g_next_ts is not None else 0
+        earliest_kind = "global" if g_next_ts is not None else None
+        earliest_task_name = None
+
+        for task in tasks_cfg:
+            t_name = task.get("name", "Unnamed Task")
+            t_interval_min = int(task.get("interval", 0) or 0)
+            t_active = bool(task.get("active", True))
+            t_source = task.get("source")
+            t_dest = task.get("dest")
+            t_next_ts = None
+
+            if t_active and t_interval_min > 0 and t_source and t_dest:
+                interval_sec = t_interval_min * 60
+                last_run = float(task.get("last_run", 0) or 0)
+                if last_run <= 0:
+                    t_next_ts = now
+                else:
+                    t_next_ts = last_run + interval_sec
+                    if t_next_ts <= now:
+                        t_next_ts = now
+
+                if t_next_ts is not None and (earliest_ts is None or t_next_ts < earliest_ts):
+                    earliest_ts = t_next_ts
+                    earliest_interval_min = t_interval_min
+                    earliest_kind = "task"
+                    earliest_task_name = t_name
+
+            tasks_out.append({
+                "name": t_name,
+                "active": t_active,
+                "interval_minutes": t_interval_min,
+                "next_run_ts": t_next_ts
+            })
+
+        has_schedule = earliest_ts is not None
+        return jsonify({
+            "enabled": bool(has_schedule),
+            "interval_minutes": int(earliest_interval_min or 0),
+            "next_run_ts": earliest_ts,
+            "global": {
+                "enabled": bool(g_enabled_cfg and g_interval_min > 0 and g_has_paths),
+                "interval_minutes": g_interval_min,
+                "next_run_ts": g_next_ts
+            },
+            "tasks": tasks_out,
+            "next": {
+                "kind": earliest_kind,
+                "task_name": earliest_task_name,
+                "ts": earliest_ts
+            }
+        })
+    except Exception as e:
+        logger.error(f"Backup plan error: {e}")
+        return jsonify({
+            "enabled": False,
+            "interval_minutes": 0,
+            "next_run_ts": None
+        })
+
+@app.route("/api/integrity_status")
+def get_integrity_status_api():
+    return jsonify(compute_integrity_status())
 
 def run_async_reindex(dest):
     """Wrapper für Re-Indexing im Hintergrund."""
@@ -7777,7 +8097,13 @@ def get_disk_stats():
 @app.route("/api/save_config", methods=["POST"])
 def save_config_api():
     current = load_config()
-    current.update(request.json)
+    if not isinstance(current, dict):
+        current = {}
+    data = request.json or {}
+    incoming = dict(data)
+    if "naming_seq_counter" in incoming:
+        incoming.pop("naming_seq_counter", None)
+    current.update(incoming)
     
     # Encrypt sensitive fields before saving
     to_save = current.copy()
@@ -8836,6 +9162,49 @@ def run_startup_tasks():
         threading.Thread(target=run_tasks_bg, daemon=True).start()
         return jsonify({"status": "started"})
     except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+@app.route("/api/submit_bug_report", methods=["POST"])
+def submit_bug_report():
+    try:
+        data = request.json
+        description = data.get("description", "")
+        include_logs = data.get("include_logs", False)
+        
+        report_id = f"bugreport_{int(time.time())}"
+        report_dir = os.path.join(os.getcwd(), "bug_reports")
+        if not os.path.exists(report_dir):
+            os.makedirs(report_dir)
+            
+        report_file = os.path.join(report_dir, f"{report_id}.txt")
+        
+        with open(report_file, "w", encoding="utf-8") as f:
+            f.write(f"BUG REPORT ID: {report_id}\n")
+            f.write(f"DATE: {datetime.datetime.now().isoformat()}\n")
+            f.write("-" * 50 + "\n")
+            f.write(f"DESCRIPTION:\n{description}\n")
+            f.write("-" * 50 + "\n")
+            
+            if include_logs:
+                f.write("SYSTEM INFO:\n")
+                f.write(f"OS: {platform.system()} {platform.release()}\n")
+                f.write(f"Python: {sys.version}\n")
+                f.write(f"App Version: 7.4.0\n")
+                f.write("-" * 50 + "\n")
+                
+                f.write("CONFIG SUMMARY:\n")
+                try:
+                    conf = load_config()
+                    # redact sensitive
+                    for k in ["cloud_password", "cloud_api_key", "encryption_password", "db_password", "github_token"]:
+                        if k in conf: conf[k] = "***"
+                    f.write(json.dumps(conf, indent=2))
+                except:
+                    f.write("Could not load config.\n")
+                    
+        return jsonify({"status": "success", "report_id": report_id, "path": report_file})
+    except Exception as e:
+        logger.error(f"Bug Report Error: {e}")
         return jsonify({"status": "error", "message": str(e)})
 
 if __name__ == "__main__":
