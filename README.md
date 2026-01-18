@@ -69,7 +69,7 @@ Der Fokus dieses Updates lag auf **Internationalisierung** und **Konsistenz**.
 ## **🔄 Updates & Wartung**
 
 Das **Sorglos-System** macht Updates kinderleicht:
-1. Starten Sie einfach den **Backup Pro Installer**.
+1. Starten Sie einfach den **Backup Pro Installer** (oder nutzen Sie die Update-Funktion im Dashboard).
 2. Der Installer lädt automatisch die **neueste Version** herunter und installiert sie.
 3. Beim nächsten Start wählt der Launcher automatisch die aktuellste Version.
 
@@ -107,6 +107,25 @@ Das **Sorglos-System** macht Updates kinderleicht:
 - **Auto-Update Launcher:** Startet immer die neuste Version.
 
 </details>
+
+---
+
+## 🐞 Fehler melden / Bug Reports
+
+In der Weboberfläche gibt es einen eigenen Button zum Melden von Fehlern:
+
+- Linke Sidebar, Eintrag **„Fehler melden“** mit kleinem 🐜‑Icon
+- Beim Hover erscheint der Tooltip **„Bug auf GitHub melden“**
+- Ein Klick öffnet die GitHub‑Issues‑Seite in einem neuen Tab:
+  - https://github.com/Exulizer/Backup_Pro/issues
+
+Für einen hilfreichen Report am besten angeben:
+
+- verwendete **Version** (z.B. v7.4, siehe Kopfzeile im Dashboard)
+- verwendetes **Betriebssystem** (z.B. Windows 10/11)
+- **Schritte zur Reproduktion** des Fehlers
+- erwartetes Verhalten vs. tatsächliches Verhalten
+- optional relevante **Konsolen-Ausgaben** oder Screenshots
 
 ---
 
