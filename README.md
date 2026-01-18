@@ -1,6 +1,8 @@
 # <img src="https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.png?raw=true" width="30" height="30" style="vertical-align: bottom;"> Backup OS Pro - Commander Edition
 
 ![Version](https://img.shields.io/badge/version-v7.4-blue?style=flat-square) ![Platform](https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white) ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white) ![License](https://img.shields.io/badge/license-Proprietary-red?style=flat-square)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white) ![Flask](https://img.shields.io/badge/Flask-Backend-000000?style=flat-square&logo=flask&logoColor=white) ![SQLite](https://img.shields.io/badge/SQLite-Database-003B57?style=flat-square&logo=sqlite&logoColor=white) ![Encryption](https://img.shields.io/badge/Encryption-AES--256-success?style=flat-square&logo=guarded-box&logoColor=white)
+![GitHub last commit](https://img.shields.io/github/last-commit/Exulizer/Backup_Pro?style=flat-square&color=lightgrey) ![GitHub repo size](https://img.shields.io/github/repo-size/Exulizer/Backup_Pro?style=flat-square) ![GitHub issues](https://img.shields.io/github/issues/Exulizer/Backup_Pro?style=flat-square) ![Localization](https://img.shields.io/badge/Language-DE_%7C_EN-orange?style=flat-square)
 
 <p align="center">
   <img src="https://github.com/Exulizer/Backup_Pro/blob/main/assets/backup_os.jpg?raw=true" width="500" alt="Backup OS Pro Dashboard">
