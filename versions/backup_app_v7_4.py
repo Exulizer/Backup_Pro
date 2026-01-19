@@ -5652,6 +5652,8 @@ HTML_TEMPLATE = """
         }
 
         async function runBackup() {
+            if (isBackupActive) return addLog(t("console.backupInProgress", "Backup läuft bereits!"), "warning");
+
             const source = document.getElementById('source').value;
             const dest = document.getElementById('dest').value;
             if(!source || !dest) return addLog(t("console.pathsMissing", "Pfade fehlen!"), "error");
@@ -7906,6 +7908,16 @@ HTML_TEMPLATE = """
                 try { loadTasks(); } catch(e) { console.error("LoadTasks failed:", e); }
                 try { initIntegrityStatus(); } catch(e) { console.error("Integrity init failed:", e); }
                 try { initBackupPlan(); } catch(e) { console.error("Backup plan init failed:", e); }
+                
+                // Initial Status Sync (für Tabs/Reloads)
+                fetch('/api/get_backup_status')
+                    .then(r => r.json())
+                    .then(data => {
+                        updateStatusUI(data);
+                        if(data.active) addLog(t("console.syncActive", "Laufendes Backup erkannt. Synchronisiere..."), "info");
+                    })
+                    .catch(e => console.error("Initial Status Sync failed:", e));
+
                 setupSSE();
                 setTimeout(initStartupCheck, 6000);
             }, 100);
