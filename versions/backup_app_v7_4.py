@@ -3475,22 +3475,20 @@ HTML_TEMPLATE = """
                 </div>
             </div>
 
-            <div class="commander-module p-5">
-                <div class="flex justify-between items-center mb-3">
+            <div class="commander-module p-5 relative overflow-hidden">
+                <div class="flex justify-between items-start mb-4 relative z-10">
                     <div>
-                        <span class="text-[11px] uppercase font-black text-slate-500 tracking-widest" data-i18n="dashboard.planTitle">Backup-Planer</span>
-                        <p class="text-[10px] text-slate-500 mt-1" data-i18n="dashboard.planDesc">Zeigt, wann das nächste automatische Backup geplant ist.</p>
-                    </div>
-                    <div class="text-[10px] font-mono text-slate-500">
-                        <span data-i18n="dashboard.planIntervalLabel">Intervall</span>:
-                        <span id="backup-plan-interval">--</span>
+                        <span class="text-[11px] uppercase font-black text-slate-500 tracking-widest flex items-center gap-2">
+                            <span data-i18n="dashboard.planTitle">Backup-Planer</span>
+                            <span class="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[9px]" id="plan-count-badge">0</span>
+                        </span>
+                        <p class="text-[10px] text-slate-500 mt-1" data-i18n="dashboard.planDesc">Nächste geplante Ausführungen.</p>
                     </div>
                 </div>
-                <div id="backup-plan-box" class="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2">
-                    <div class="text-[10px] font-black uppercase text-slate-500">
-                        <span id="backup-plan-status" data-i18n="dashboard.nextBackupLabel">Nächstes Backup</span>:
-                    </div>
-                    <div class="text-sm font-mono text-blue-400" id="backup-plan-next">--</div>
+                
+                <div id="backup-plan-list" class="space-y-2 max-h-[120px] overflow-y-auto custom-scrollbar relative z-10 pr-1">
+                    <!-- List Items Injected via JS -->
+                    <div class="text-[10px] text-slate-600 italic text-center py-4" data-i18n="dashboard.planEmpty">Keine aktiven Pläne</div>
                 </div>
             </div>
 
@@ -7072,7 +7070,7 @@ HTML_TEMPLATE = """
             // Visual Feedback: Start
             const btn = document.getElementById('btn-save-task');
             if(btn) {
-                btn.innerText = "Speichert...";
+                btn.innerText = t("tasks.savingText", "Speichert...");
                 btn.disabled = true;
             }
 
@@ -7101,43 +7099,44 @@ HTML_TEMPLATE = """
                 
                 const res = await saveResp.json();
                 if(res.status === 'success') {
-                    addLog("Task gespeichert.", "success");
+                    addLog(t("tasks.saveSuccessLog", "Task gespeichert."), "success");
                     renderTaskList();
+                    initBackupPlan();
                     
                     // Visual Feedback: Success
                     if(btn) {
-                        btn.innerText = "Gespeichert!";
+                        btn.innerText = t("tasks.saveSuccessText", "Gespeichert!");
                         btn.classList.remove('bg-emerald-500/20', 'text-emerald-400');
                         btn.classList.add('bg-emerald-500', 'text-white');
                         
                         setTimeout(() => {
-                            btn.innerText = "Speichern";
+                            btn.innerText = t("tasks.saveButton", "Speichern");
                             btn.classList.add('bg-emerald-500/20', 'text-emerald-400');
                             btn.classList.remove('bg-emerald-500', 'text-white');
                             btn.disabled = false;
                         }, 2000);
                     }
                 } else {
-                    addLog("Fehler beim Speichern.", "error");
+                    addLog(t("tasks.saveErrorLog", "Fehler beim Speichern."), "error");
                     // Visual Feedback: Error
                     if(btn) {
-                         btn.innerText = "Fehler!";
+                         btn.innerText = t("tasks.saveErrorText", "Fehler!");
                          btn.classList.add('bg-red-500', 'text-white');
                          setTimeout(() => {
-                             btn.innerText = "Speichern";
+                             btn.innerText = t("tasks.saveButton", "Speichern");
                              btn.classList.remove('bg-red-500', 'text-white');
                              btn.disabled = false;
                          }, 2000);
                     }
                 }
             } catch(e) {
-                addLog("Fehler beim Speichern.", "error");
+                addLog(t("tasks.saveErrorLog", "Fehler beim Speichern."), "error");
                 // Visual Feedback: Error
                 if(btn) {
-                     btn.innerText = "Fehler!";
+                     btn.innerText = t("tasks.saveErrorText", "Fehler!");
                      btn.classList.add('bg-red-500', 'text-white');
                      setTimeout(() => {
-                         btn.innerText = "Speichern";
+                         btn.innerText = t("tasks.saveButton", "Speichern");
                          btn.classList.remove('bg-red-500', 'text-white');
                          btn.disabled = false;
                      }, 2000);
@@ -7167,6 +7166,7 @@ HTML_TEMPLATE = """
                     body: JSON.stringify(config)
                 });
                 renderTaskList();
+                initBackupPlan();
                 addLog(t("console.taskDeleted", "Task deleted."), "success");
             } catch(e) {
                 addLog(t("console.deleteError", "Error while deleting."), "error");
@@ -7587,42 +7587,82 @@ HTML_TEMPLATE = """
 
         async function initBackupPlan() {
             try {
-                const box = document.getElementById('backup-plan-box');
-                const statusEl = document.getElementById('backup-plan-status');
-                const nextEl = document.getElementById('backup-plan-next');
-                const intervalEl = document.getElementById('backup-plan-interval');
-                if (!box || !statusEl || !nextEl || !intervalEl) return;
+                const listEl = document.getElementById('backup-plan-list');
+                const badgeEl = document.getElementById('plan-count-badge');
+                if (!listEl || !badgeEl) return;
+                
                 const resp = await fetch('/api/backup_plan');
                 if (!resp.ok) return;
                 const data = await resp.json();
-                if (!data || !data.enabled || !data.next_run_ts) {
-                    statusEl.innerText = t("dashboard.nextBackupLabel", "Nächstes Backup") + ":";
-                    nextEl.innerText = t("dashboard.planDisabled", "Automatisches Backup ist deaktiviert");
-                    intervalEl.innerText = "--";
+                
+                if (!data || !data.enabled || !data.events || data.events.length === 0) {
+                    listEl.innerHTML = `<div class="text-[10px] text-slate-600 italic text-center py-4" data-i18n="dashboard.planEmpty">${t("dashboard.planEmpty", "Keine aktiven Pläne")}</div>`;
+                    badgeEl.innerText = "0";
                     return;
                 }
+                
+                const events = data.events;
+                badgeEl.innerText = events.length;
+                
                 const lang = (window.BP_LANG || 'de').toLowerCase();
                 const locale = lang === 'en' ? 'en-GB' : 'de-DE';
-                let label = t("dashboard.planUnknown", "Kein Zeitplan verfügbar");
-                if (typeof data.next_run_ts === "number") {
-                    const dt = new Date(data.next_run_ts * 1000);
+                
+                let html = '';
+                
+                events.forEach(ev => {
+                    const dt = new Date(ev.ts * 1000);
                     const now = new Date();
+                    const diffMs = dt - now;
+                    
+                    // Format Date
                     const sameDay = dt.toDateString() === now.toDateString();
                     const timeStr = dt.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+                    let dateLabel = "";
+                    
                     if (sameDay) {
                         const todayWord = t("dashboard.nextBackupToday", lang === 'en' ? "Today" : "Heute");
-                        label = lang === 'en' ? `${todayWord} ${timeStr}` : `${todayWord} ${timeStr} Uhr`;
+                        dateLabel = lang === 'en' ? `${todayWord}, ${timeStr}` : `${todayWord}, ${timeStr} Uhr`;
                     } else {
-                        const dateStr = dt.toLocaleDateString(locale);
-                        label = `${dateStr} ${timeStr}`;
+                        const dateStr = dt.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+                        dateLabel = lang === 'en' ? `${dateStr} ${timeStr}` : `${dateStr} - ${timeStr} Uhr`;
                     }
-                }
-                statusEl.innerText = t("dashboard.nextBackupLabel", "Nächstes Backup") + ":";
-                nextEl.innerText = label;
-                const intervalMinutes = (data.interval_minutes && data.interval_minutes > 0)
-                    ? data.interval_minutes
-                    : (data.global && data.global.interval_minutes) || 0;
-                intervalEl.innerText = intervalMinutes > 0 ? `${intervalMinutes} min` : "--";
+                    
+                    // Relative Time (e.g. "in 5 min")
+                    let relLabel = "";
+                    const diffMin = Math.ceil(diffMs / 60000);
+                    if (diffMin <= 0) {
+                        relLabel = t("dashboard.planNow", "Jetzt");
+                    } else if (diffMin < 60) {
+                        relLabel = `in ${diffMin} min`;
+                    } else {
+                        const h = Math.floor(diffMin / 60);
+                        const m = diffMin % 60;
+                        relLabel = `in ${h}h ${m}min`;
+                    }
+                    
+                    const isGlobal = ev.type === 'global';
+                    const icon = isGlobal ? '🌐' : '📋';
+                    const name = isGlobal ? t("dashboard.planGlobalName", "Globales Backup") : ev.name;
+                    const intervalLabel = ev.interval > 0 ? `(${ev.interval} min)` : '';
+                    
+                    html += `
+                    <div class="flex items-center justify-between p-2 rounded bg-white/5 border border-white/5 hover:border-blue-500/30 transition-colors group">
+                        <div class="flex items-center gap-3">
+                            <span class="text-sm opacity-50 group-hover:opacity-100 transition-opacity">${icon}</span>
+                            <div class="flex flex-col">
+                                <span class="text-[10px] font-bold text-slate-300">${name} <span class="text-[9px] text-slate-600 font-mono">${intervalLabel}</span></span>
+                                <span class="text-[9px] font-mono text-blue-400">${dateLabel}</span>
+                            </div>
+                        </div>
+                        <div class="text-[9px] font-black text-slate-500 bg-black/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                            ${relLabel}
+                        </div>
+                    </div>
+                    `;
+                });
+                
+                listEl.innerHTML = html;
+                
             } catch(e) {
                 console.error("Backup plan load failed:", e);
             }
@@ -7938,13 +7978,16 @@ def get_backup_plan():
     try:
         cfg = load_config()
         now = time.time()
+        
+        events = []
+
         # Global schedule
         g_enabled_cfg = bool(cfg.get("auto_backup_enabled", False))
         g_interval_min = int(cfg.get("auto_interval", 0) or 0)
         g_source = cfg.get("default_source") or ""
         g_dest = cfg.get("default_dest") or ""
         g_has_paths = bool(g_source and g_dest)
-        g_next_ts = None
+        
         if g_enabled_cfg and g_interval_min > 0 and g_has_paths:
             interval_sec = g_interval_min * 60
             base = auto_scheduler_last_global_run
@@ -7954,69 +7997,56 @@ def get_backup_plan():
             if interval_sec > 0:
                 while g_next_ts <= now:
                     g_next_ts += interval_sec
+            
+            events.append({
+                "type": "global",
+                "name": "Global Backup",
+                "ts": g_next_ts,
+                "interval": g_interval_min
+            })
 
         # Task schedules
         tasks_cfg = cfg.get("tasks", [])
-        tasks_out = []
-        earliest_ts = g_next_ts
-        earliest_interval_min = g_interval_min if g_next_ts is not None else 0
-        earliest_kind = "global" if g_next_ts is not None else None
-        earliest_task_name = None
-
         for task in tasks_cfg:
             t_name = task.get("name", "Unnamed Task")
             t_interval_min = int(task.get("interval", 0) or 0)
             t_active = bool(task.get("active", True))
             t_source = task.get("source")
             t_dest = task.get("dest")
-            t_next_ts = None
-
+            
             if t_active and t_interval_min > 0 and t_source and t_dest:
                 interval_sec = t_interval_min * 60
                 last_run = float(task.get("last_run", 0) or 0)
+                t_next_ts = 0
                 if last_run <= 0:
                     t_next_ts = now
                 else:
                     t_next_ts = last_run + interval_sec
                     if t_next_ts <= now:
                         t_next_ts = now
-
-                if t_next_ts is not None and (earliest_ts is None or t_next_ts < earliest_ts):
-                    earliest_ts = t_next_ts
-                    earliest_interval_min = t_interval_min
-                    earliest_kind = "task"
-                    earliest_task_name = t_name
-
-            tasks_out.append({
-                "name": t_name,
-                "active": t_active,
-                "interval_minutes": t_interval_min,
-                "next_run_ts": t_next_ts
-            })
-
-        has_schedule = earliest_ts is not None
+                
+                events.append({
+                    "type": "task",
+                    "name": t_name,
+                    "ts": t_next_ts,
+                    "interval": t_interval_min
+                })
+        
+        # Sort by timestamp
+        events.sort(key=lambda x: x["ts"])
+        
+        # Limit to next 5 events (optional, but good for UI)
+        # events = events[:5] 
+        
         return jsonify({
-            "enabled": bool(has_schedule),
-            "interval_minutes": int(earliest_interval_min or 0),
-            "next_run_ts": earliest_ts,
-            "global": {
-                "enabled": bool(g_enabled_cfg and g_interval_min > 0 and g_has_paths),
-                "interval_minutes": g_interval_min,
-                "next_run_ts": g_next_ts
-            },
-            "tasks": tasks_out,
-            "next": {
-                "kind": earliest_kind,
-                "task_name": earliest_task_name,
-                "ts": earliest_ts
-            }
+            "enabled": len(events) > 0,
+            "events": events
         })
     except Exception as e:
         logger.error(f"Backup plan error: {e}")
         return jsonify({
             "enabled": False,
-            "interval_minutes": 0,
-            "next_run_ts": None
+            "events": []
         })
 
 @app.route("/api/integrity_status")
