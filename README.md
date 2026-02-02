@@ -5,7 +5,7 @@
 ![GitHub last commit](https://img.shields.io/github/last-commit/Exulizer/Backup_Pro?style=flat-square&color=lightgrey) ![GitHub repo size](https://img.shields.io/github/repo-size/Exulizer/Backup_Pro?style=flat-square) ![GitHub issues](https://img.shields.io/github/issues/Exulizer/Backup_Pro?style=flat-square) ![Localization](https://img.shields.io/badge/Language-DE_%7C_EN-orange?style=flat-square)
 
 <p align="center">
-  <img src="https://github.com/Exulizer/Backup_Pro/blob/main/assets/backup_os.jpg?raw=true" width="500" alt="Backup OS Pro Dashboard">
+  <img src="https://github.com/Exulizer/Backup_Pro/blob/main/assets/backup_pro_v8.jpg?raw=true" width="500" alt="Backup OS Pro Dashboard">
 </p>
 
 **Backup OS Pro** ist ein hochmodernes, hybrides Backup-System für **Windows 10/11**, das professionelle Datensicherheit mit einer intuitiven **Weboberfläche** verbindet.
