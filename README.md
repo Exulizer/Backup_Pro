@@ -1,6 +1,6 @@
 # <img src="https://github.com/Exulizer/Backup_Pro/blob/main/assets/logo/logo.png?raw=true" width="30" height="30" style="vertical-align: bottom;"> Backup OS Pro - Commander Edition
 
-![Version](https://img.shields.io/badge/version-v7.4-blue?style=flat-square) ![Platform](https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white) ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white) ![License](https://img.shields.io/badge/license-Proprietary-red?style=flat-square)
+![Version](https://img.shields.io/badge/version-v8.0-blue?style=flat-square) ![Platform](https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white) ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white) ![License](https://img.shields.io/badge/license-Proprietary-red?style=flat-square)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white) ![Flask](https://img.shields.io/badge/Flask-Backend-000000?style=flat-square&logo=flask&logoColor=white) ![SQLite](https://img.shields.io/badge/SQLite-Database-003B57?style=flat-square&logo=sqlite&logoColor=white) ![Encryption](https://img.shields.io/badge/Encryption-AES--256-success?style=flat-square&logo=guarded-box&logoColor=white)
 ![GitHub last commit](https://img.shields.io/github/last-commit/Exulizer/Backup_Pro?style=flat-square&color=lightgrey) ![GitHub repo size](https://img.shields.io/github/repo-size/Exulizer/Backup_Pro?style=flat-square) ![GitHub issues](https://img.shields.io/github/issues/Exulizer/Backup_Pro?style=flat-square) ![Localization](https://img.shields.io/badge/Language-DE_%7C_EN-orange?style=flat-square)
 
@@ -43,9 +43,9 @@ Es wurde entwickelt, um Projekte und wichtige Verzeichnisse nicht nur zu archivi
 Wir haben die Installation radikal vereinfacht. Sie benötigen **kein Vorwissen** über Python oder Git.
 
 ### **1. Installation**
-1. Laden Sie die **`install_backup_pro`** ZIP-Datei herunter und entpacken Sie diese.
+1. Laden Sie das **Installations-Paket** herunter und entpacken Sie es.
 2. Starten Sie **`setup.bat`**.
-   - *Der Installer prüft Python, erstellt eine isolierte Umgebung (`.venv`) und lädt alle Abhängigkeiten.*
+   - *Der Smart Installer prüft Python, repariert fehlende System-Module automatisch und erstellt eine isolierte Umgebung.*
    - Wählen Sie im Installer **"Download App"** und dann **"Installation Starten"**.
 
 ### **2. Starten**
@@ -56,13 +56,15 @@ Wir haben die Installation radikal vereinfacht. Sie benötigen **kein Vorwissen*
 
 ---
 
-## **🆕 Aktuelles Update (v7.4 Hybrid Kernel)**
+## **🆕 Aktuelles Update (v8.0 Smart Installer)**
 
-Der Fokus dieses Updates lag auf **Internationalisierung** und **Konsistenz**.
+Das **v8.0 Update** revolutioniert den Installationsprozess und die Systemstabilität.
 
-- **🌐 Bilinguales Interface:** Vollständige Übersetzung (DE/EN) für Konsole, Scheduler und Logs.
-- **🧩 Smarte UI-Elemente:** Sprachabhängige Platzhalter ("Keine Tasks") und Status-Buttons.
-- **🔧 Fehlerbehebung:** Konsistente Fehlermeldungen bei SFTP-Verbindungen in der gewählten Sprache.
+- **🛠️ Smart Installer:** Automatische Erkennung und Reparatur fehlender System-Module (Self-Healing).
+- **🛡️ Permission Fallback:** Nahtlose Installation auch ohne Administrator-Rechte (automatischer Wechsel in den User-Mode).
+- **📉 Download-Optimierung:** Vollständige Installation mit nur **2 Dateien**.
+- **🧩 DLL-Safety:** Isoliertes Laden von Abhängigkeiten verhindert "DLL Load Failed" Fehler auf komplexen Systemen.
+- **⚡ Performance:** Optimierter Startvorgang und verbesserte Pfad-Erkennung.
 
 ---
 
@@ -90,6 +92,11 @@ Das **Sorglos-System** macht Updates kinderleicht:
 
 <details>
 <summary><strong>📜 Änderungshistorie (Ältere Versionen)</strong></summary>
+
+### **v7.4 (Hybrid Kernel)**
+- **Bilinguales Interface:** Vollständige Übersetzung (DE/EN).
+- **Smarte UI:** Sprachabhängige Platzhalter und Status-Buttons.
+- **Konsistenz:** Einheitliche Fehlermeldungen in beiden Sprachen.
 
 ### **v7.3 (Snapshot Inspector)**
 - **Deep Scan Engine:** Bit-Integrität per Hash prüfen.
