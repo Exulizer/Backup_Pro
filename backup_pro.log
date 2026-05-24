@@ -1,0 +1,76 @@
+{"timestamp": "2026-05-24 16:21:43,180", "level": "INFO", "logger": "Main", "message": "Starting Backup Pro v8...", "module": "main", "line": 36}
+{"timestamp": "2026-05-24 16:21:43,204", "level": "DEBUG", "logger": "config.settings_manager", "message": "Konfiguration geladen: C:\\Users\\Stullenbrot\\.gemini\\antigravity\\scratch\\Backup_Pro-main\\install_backup_pro\\config\\backup_config.json", "module": "settings_manager", "line": 29}
+{"timestamp": "2026-05-24 16:21:43,227", "level": "INFO", "logger": "core.scheduler", "message": "BackupScheduler gestartet.", "module": "scheduler", "line": 26}
+{"timestamp": "2026-05-24 16:21:43,243", "level": "INFO", "logger": "Main", "message": "Starting Web Server on port 5000...", "module": "main", "line": 63}
+{"timestamp": "2026-05-24 16:21:43,248", "level": "INFO", "logger": "gui.web_server", "message": "Starting production server (Gevent) on port 5000...", "module": "web_server", "line": 870}
+{"timestamp": "2026-05-24 16:32:18,683", "level": "INFO", "logger": "Main", "message": "Starting Backup Pro v8...", "module": "main", "line": 36}
+{"timestamp": "2026-05-24 16:32:18,695", "level": "DEBUG", "logger": "config.settings_manager", "message": "Konfiguration geladen: C:\\Users\\Stullenbrot\\.gemini\\antigravity\\scratch\\Backup_Pro_Fixed\\install_backup_pro\\config\\backup_config.json", "module": "settings_manager", "line": 29}
+{"timestamp": "2026-05-24 16:32:18,702", "level": "INFO", "logger": "core.scheduler", "message": "BackupScheduler gestartet.", "module": "scheduler", "line": 26}
+{"timestamp": "2026-05-24 16:32:18,712", "level": "INFO", "logger": "Main", "message": "Starting Web Server on port 5000...", "module": "main", "line": 63}
+{"timestamp": "2026-05-24 16:32:18,719", "level": "INFO", "logger": "gui.web_server", "message": "Starting production server (Gevent) on port 5000...", "module": "web_server", "line": 870}
+{"timestamp": "2026-05-24 16:32:44,803", "level": "INFO", "logger": "Main", "message": "Starting Backup Pro v8...", "module": "main", "line": 36}
+{"timestamp": "2026-05-24 16:32:44,804", "level": "DEBUG", "logger": "config.settings_manager", "message": "Konfiguration geladen: C:\\Users\\Stullenbrot\\.gemini\\antigravity\\scratch\\Backup_Pro_Fixed\\install_backup_pro\\config\\backup_config.json", "module": "settings_manager", "line": 29}
+{"timestamp": "2026-05-24 16:32:44,808", "level": "INFO", "logger": "core.scheduler", "message": "BackupScheduler gestartet.", "module": "scheduler", "line": 26}
+{"timestamp": "2026-05-24 16:32:44,825", "level": "INFO", "logger": "Main", "message": "Starting Web Server on port 5001...", "module": "main", "line": 63}
+{"timestamp": "2026-05-24 16:32:44,830", "level": "INFO", "logger": "gui.web_server", "message": "Starting production server (Gevent) on port 5001...", "module": "web_server", "line": 870}
+{"timestamp": "2026-05-24 16:33:52,576", "level": "INFO", "logger": "config.settings_manager", "message": "Konfiguration gespeichert.", "module": "settings_manager", "line": 55}
+{"timestamp": "2026-05-24 16:33:52,599", "level": "DEBUG", "logger": "config.settings_manager", "message": "Konfiguration geladen: C:\\Users\\Stullenbrot\\.gemini\\antigravity\\scratch\\Backup_Pro_Fixed\\install_backup_pro\\config\\backup_config.json", "module": "settings_manager", "line": 29}
+{"timestamp": "2026-05-24 16:33:57,419", "level": "INFO", "logger": "core.backup_engine", "message": "Validiere Pfade...", "module": "backup_engine", "line": 118}
+{"timestamp": "2026-05-24 16:33:57,420", "level": "WARNING", "logger": "core.backup_engine", "message": "WARNUNG: Cloud-Richtung ist auf 'Download' gestellt. Cloud-Upload wird f\u00fcr dieses Backup \u00fcbersprungen.", "module": "backup_engine", "line": 116}
+{"timestamp": "2026-05-24 16:33:57,422", "level": "INFO", "logger": "core.backup_engine", "message": "Validiere Pfade...", "module": "backup_engine", "line": 118}
+{"timestamp": "2026-05-24 16:33:57,422", "level": "INFO", "logger": "core.backup_engine", "message": "Analysiere Dateistruktur (Parallel)...", "module": "backup_engine", "line": 118}
+{"timestamp": "2026-05-24 16:33:57,426", "level": "INFO", "logger": "core.backup_engine", "message": "Starte Komprimierung (1 Dateien, 30.90 KB)...", "module": "backup_engine", "line": 118}
+{"timestamp": "2026-05-24 16:33:57,451", "level": "INFO", "logger": "core.backup_engine", "message": "Archiv erstellt: 2026-05-24_16-33-57.zip", "module": "backup_engine", "line": 118}
+{"timestamp": "2026-05-24 16:33:57,451", "level": "INFO", "logger": "core.backup_engine", "message": "Berechne Checksumme...", "module": "backup_engine", "line": 118}
+{"timestamp": "2026-05-24 16:33:57,485", "level": "INFO", "logger": "core.backup_engine", "message": "Archiv erstellt: 21.49 KB", "module": "backup_engine", "line": 118}
+{"timestamp": "2026-05-24 16:34:01,778", "level": "DEBUG", "logger": "config.settings_manager", "message": "Konfiguration geladen: C:\\Users\\Stullenbrot\\.gemini\\antigravity\\scratch\\Backup_Pro_Fixed\\install_backup_pro\\config\\backup_config.json", "module": "settings_manager", "line": 29}
+{"timestamp": "2026-05-24 16:35:06,178", "level": "INFO", "logger": "Main", "message": "Starting Backup Pro v8...", "module": "main", "line": 36}
+{"timestamp": "2026-05-24 16:35:06,179", "level": "DEBUG", "logger": "config.settings_manager", "message": "Konfiguration geladen: C:\\Users\\Stullenbrot\\.gemini\\antigravity\\scratch\\Backup_Pro_Fixed\\install_backup_pro\\config\\backup_config.json", "module": "settings_manager", "line": 29}
+{"timestamp": "2026-05-24 16:35:06,181", "level": "INFO", "logger": "core.scheduler", "message": "BackupScheduler gestartet.", "module": "scheduler", "line": 26}
+{"timestamp": "2026-05-24 16:35:06,192", "level": "INFO", "logger": "Main", "message": "Starting Web Server on port 5000...", "module": "main", "line": 63}
+{"timestamp": "2026-05-24 16:35:06,196", "level": "INFO", "logger": "gui.web_server", "message": "Starting production server (Gevent) on port 5000...", "module": "web_server", "line": 870}
+{"timestamp": "2026-05-24 16:37:47,068", "level": "INFO", "logger": "Main", "message": "Starting Backup Pro v8...", "module": "main", "line": 36}
+{"timestamp": "2026-05-24 16:37:47,069", "level": "DEBUG", "logger": "config.settings_manager", "message": "Konfiguration geladen: C:\\Users\\Stullenbrot\\.gemini\\antigravity\\scratch\\Backup_Pro_Fixed\\install_backup_pro\\config\\backup_config.json", "module": "settings_manager", "line": 29}
+{"timestamp": "2026-05-24 16:37:47,073", "level": "INFO", "logger": "core.scheduler", "message": "BackupScheduler gestartet.", "module": "scheduler", "line": 26}
+{"timestamp": "2026-05-24 16:37:47,085", "level": "INFO", "logger": "Main", "message": "Starting Web Server on port 5000...", "module": "main", "line": 63}
+{"timestamp": "2026-05-24 16:37:47,089", "level": "INFO", "logger": "gui.web_server", "message": "Starting production server (Gevent) on port 5000...", "module": "web_server", "line": 870}
+{"timestamp": "2026-05-24 16:41:24,681", "level": "INFO", "logger": "Main", "message": "Starting Backup Pro v8...", "module": "main", "line": 36}
+{"timestamp": "2026-05-24 16:41:24,683", "level": "DEBUG", "logger": "config.settings_manager", "message": "Konfiguration geladen: C:\\Users\\Stullenbrot\\.gemini\\antigravity\\scratch\\Backup_Pro_Fixed\\install_backup_pro\\config\\backup_config.json", "module": "settings_manager", "line": 29}
+{"timestamp": "2026-05-24 16:41:24,686", "level": "INFO", "logger": "core.scheduler", "message": "BackupScheduler gestartet.", "module": "scheduler", "line": 26}
+{"timestamp": "2026-05-24 16:41:24,696", "level": "INFO", "logger": "Main", "message": "Starting Web Server on port 5000...", "module": "main", "line": 63}
+{"timestamp": "2026-05-24 16:41:24,702", "level": "INFO", "logger": "gui.web_server", "message": "Starting production server (Gevent) on port 5000...", "module": "web_server", "line": 870}
+{"timestamp": "2026-05-24 16:42:01,728", "level": "INFO", "logger": "Main", "message": "Starting Backup Pro v8...", "module": "main", "line": 36}
+{"timestamp": "2026-05-24 16:42:01,730", "level": "DEBUG", "logger": "config.settings_manager", "message": "Konfiguration geladen: C:\\Users\\Stullenbrot\\.gemini\\antigravity\\scratch\\Backup_Pro_Fixed\\install_backup_pro\\config\\backup_config.json", "module": "settings_manager", "line": 29}
+{"timestamp": "2026-05-24 16:42:01,733", "level": "INFO", "logger": "core.scheduler", "message": "BackupScheduler gestartet.", "module": "scheduler", "line": 26}
+{"timestamp": "2026-05-24 16:42:01,748", "level": "INFO", "logger": "Main", "message": "Starting Web Server on port 5000...", "module": "main", "line": 63}
+{"timestamp": "2026-05-24 16:42:01,752", "level": "INFO", "logger": "gui.web_server", "message": "Starting production server (Gevent) on port 5000...", "module": "web_server", "line": 870}
+{"timestamp": "2026-05-24 16:45:11,550", "level": "INFO", "logger": "Main", "message": "Starting Backup Pro v8...", "module": "main", "line": 36}
+{"timestamp": "2026-05-24 16:45:11,551", "level": "DEBUG", "logger": "config.settings_manager", "message": "Konfiguration geladen: C:\\Users\\Stullenbrot\\.gemini\\antigravity\\scratch\\Backup_Pro_Fixed\\install_backup_pro\\config\\backup_config.json", "module": "settings_manager", "line": 29}
+{"timestamp": "2026-05-24 16:45:11,554", "level": "INFO", "logger": "core.scheduler", "message": "BackupScheduler gestartet.", "module": "scheduler", "line": 26}
+{"timestamp": "2026-05-24 16:45:11,565", "level": "INFO", "logger": "Main", "message": "Starting Web Server on port 5000...", "module": "main", "line": 63}
+{"timestamp": "2026-05-24 16:45:11,569", "level": "INFO", "logger": "gui.web_server", "message": "Starting production server (Gevent) on port 5000...", "module": "web_server", "line": 870}
+{"timestamp": "2026-05-24 16:47:43,035", "level": "INFO", "logger": "Main", "message": "Starting Backup Pro v8...", "module": "main", "line": 36}
+{"timestamp": "2026-05-24 16:47:43,037", "level": "DEBUG", "logger": "config.settings_manager", "message": "Konfiguration geladen: C:\\Users\\Stullenbrot\\.gemini\\antigravity\\scratch\\Backup_Pro_Fixed\\install_backup_pro\\config\\backup_config.json", "module": "settings_manager", "line": 29}
+{"timestamp": "2026-05-24 16:47:43,041", "level": "INFO", "logger": "core.scheduler", "message": "BackupScheduler gestartet.", "module": "scheduler", "line": 26}
+{"timestamp": "2026-05-24 16:47:43,057", "level": "INFO", "logger": "Main", "message": "Starting Web Server on port 5000...", "module": "main", "line": 63}
+{"timestamp": "2026-05-24 16:47:43,061", "level": "INFO", "logger": "gui.web_server", "message": "Starting production server (Gevent) on port 5000...", "module": "web_server", "line": 870}
+{"timestamp": "2026-05-24 16:49:44,986", "level": "INFO", "logger": "Main", "message": "Starting Backup Pro v8...", "module": "main", "line": 36}
+{"timestamp": "2026-05-24 16:49:44,988", "level": "DEBUG", "logger": "config.settings_manager", "message": "Konfiguration geladen: C:\\Users\\Stullenbrot\\.gemini\\antigravity\\scratch\\Backup_Pro_Fixed\\install_backup_pro\\config\\backup_config.json", "module": "settings_manager", "line": 29}
+{"timestamp": "2026-05-24 16:49:44,992", "level": "INFO", "logger": "core.scheduler", "message": "BackupScheduler gestartet.", "module": "scheduler", "line": 26}
+{"timestamp": "2026-05-24 16:49:45,005", "level": "INFO", "logger": "Main", "message": "Starting Web Server on port 5000...", "module": "main", "line": 63}
+{"timestamp": "2026-05-24 16:49:45,011", "level": "INFO", "logger": "gui.web_server", "message": "Starting production server (Gevent) on port 5000...", "module": "web_server", "line": 870}
+{"timestamp": "2026-05-24 16:50:39,816", "level": "INFO", "logger": "Main", "message": "Starting Backup Pro v8...", "module": "main", "line": 36}
+{"timestamp": "2026-05-24 16:50:39,817", "level": "DEBUG", "logger": "config.settings_manager", "message": "Konfiguration geladen: C:\\Users\\Stullenbrot\\.gemini\\antigravity\\scratch\\Backup_Pro_Fixed\\install_backup_pro\\config\\backup_config.json", "module": "settings_manager", "line": 29}
+{"timestamp": "2026-05-24 16:50:39,821", "level": "INFO", "logger": "core.scheduler", "message": "BackupScheduler gestartet.", "module": "scheduler", "line": 26}
+{"timestamp": "2026-05-24 16:50:39,833", "level": "INFO", "logger": "Main", "message": "Starting Web Server on port 5000...", "module": "main", "line": 63}
+{"timestamp": "2026-05-24 16:50:39,837", "level": "INFO", "logger": "gui.web_server", "message": "Starting production server (Gevent) on port 5000...", "module": "web_server", "line": 870}
+{"timestamp": "2026-05-24 16:53:51,336", "level": "INFO", "logger": "Main", "message": "Starting Backup Pro v8...", "module": "main", "line": 36}
+{"timestamp": "2026-05-24 16:53:51,345", "level": "DEBUG", "logger": "config.settings_manager", "message": "Konfiguration geladen: C:\\Users\\Stullenbrot\\.gemini\\antigravity\\scratch\\Backup_Pro_Fixed\\install_backup_pro\\config\\backup_config.json", "module": "settings_manager", "line": 29}
+{"timestamp": "2026-05-24 16:53:51,358", "level": "INFO", "logger": "core.scheduler", "message": "BackupScheduler gestartet.", "module": "scheduler", "line": 26}
+{"timestamp": "2026-05-24 16:53:51,373", "level": "INFO", "logger": "Main", "message": "Starting Web Server on port 5000...", "module": "main", "line": 63}
+{"timestamp": "2026-05-24 16:53:51,379", "level": "INFO", "logger": "gui.web_server", "message": "Starting production server (Gevent) on port 5000...", "module": "web_server", "line": 870}
+{"timestamp": "2026-05-24 16:59:34,570", "level": "INFO", "logger": "Main", "message": "Starting Backup Pro v8...", "module": "main", "line": 36}
+{"timestamp": "2026-05-24 16:59:34,571", "level": "DEBUG", "logger": "config.settings_manager", "message": "Konfiguration geladen: C:\\Users\\Stullenbrot\\.gemini\\antigravity\\scratch\\Backup_Pro_Fixed\\install_backup_pro\\config\\backup_config.json", "module": "settings_manager", "line": 29}
+{"timestamp": "2026-05-24 16:59:34,577", "level": "INFO", "logger": "core.scheduler", "message": "BackupScheduler gestartet.", "module": "scheduler", "line": 26}
+{"timestamp": "2026-05-24 16:59:34,589", "level": "INFO", "logger": "Main", "message": "Starting Web Server on port 5000...", "module": "main", "line": 63}
+{"timestamp": "2026-05-24 16:59:34,596", "level": "INFO", "logger": "gui.web_server", "message": "Starting production server (Gevent) on port 5000...", "module": "web_server", "line": 870}
