@@ -1,6 +1,6 @@
 {
-    "default_source": "",
-    "default_dest": "",
+    "default_source": "C:/Users/Stullenbrot/Documents/3D Druck + CAD/STLS/First Layer",
+    "default_dest": "C:/Users/Stullenbrot/Documents/3D Druck + CAD/STLS",
     "retention_count": 10,
     "exclusions": "",
     "safety_snapshots": true,
